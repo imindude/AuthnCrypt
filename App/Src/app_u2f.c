@@ -86,7 +86,8 @@ static void process_term(U2fData *this)
 {
     hidif_write(this->cid_, HIDIF_MSG);
     memset(this, 0, sizeof(U2fData));
-    status_postman(_AppStatus_Idle_);
+    status_reset();
+    pin_reset();
 }
 
 static bool process_timeout(U2fData *this, uint32_t now_ms)
@@ -94,8 +95,7 @@ static bool process_timeout(U2fData *this, uint32_t now_ms)
     if (now_ms > this->timeout_ms_)
     {
         hidif_error(this->cid_, FIDO_ERR_TIMEOUT);
-        memset(this, 0, sizeof(U2fData));
-        status_postman(_AppStatus_Idle_);
+        process_term(this);
 
         return true;
     }
@@ -278,12 +278,12 @@ static void lease_registration(U2fData *this)
     uint16_t    fido_key_size;
     uint8_t     *fido_key = device_get_fido_key(&fido_key_size);
 
-#if 1
+#if 1   // fido key as PEM
     mbedtls_pk_init(&pk_ctx);
     mbedtls_pk_parse_key(&pk_ctx, fido_key, fido_key_size, NULL, 0);
     mbedtls_pk_sign(&pk_ctx, MBEDTLS_MD_SHA256, buffer, mbedtls_md_get_size(md_info), sign, &len, device_mbedtls_rng, NULL);
     mbedtls_pk_free(&pk_ctx);
-#else
+#else   // fido_key as binary
     mbedtls_ecdsa_context   ecdsa_ctx;
 
     mbedtls_ecdsa_init(&ecdsa_ctx);
@@ -412,7 +412,7 @@ static bool wakeup_func(uint32_t now_ms, uint32_t wakeup_ms, uint32_t worker_ms,
 
         if (!process_timeout(this, now_ms))
         {
-            if (status_get() == _AppStatus_Idle_)
+            if (device_get_info()->pin_confirmed_)
             {
                 wakeup = true;
             }

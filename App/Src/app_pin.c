@@ -63,13 +63,16 @@ static PinData      _pin_data;
  */
 static uint8_t  _pin_buffer[PIN_MAX_TOUCHES] =
 {
-//        PIN_DOT_VAL,
-//        PIN_DOT_VAL,
-//        PIN_DOT_VAL,
-//        PIN_DOOOT_VAL,
-//        PIN_DOOOT_VAL,
-//        PIN_DOOOT_VAL
+#if 1
+        PIN_DOT_VAL,
+        PIN_DOT_VAL,
+        PIN_DOT_VAL,
+        PIN_DOOOT_VAL,
+        PIN_DOOOT_VAL,
+        PIN_DOOOT_VAL
+#else
         0,0,0,0,0,0
+#endif
 };
 
 /* ****************************************************************************************************************** */
@@ -96,7 +99,9 @@ static void process_term(PinData *this)
 {
     hidif_write(this->cid_, HIDIF_PIN);
     memset(this, 0, sizeof(PinData));
-    status_postman(_AppStatus_Idle_);
+
+    if (this->command_ != PIN_INS_CHECK)
+        status_postman(_AppStatus_Idle_);
 }
 
 static bool process_timeout(PinData *this, uint32_t now_ms)
@@ -272,6 +277,8 @@ void pin_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
 
             load_pincode(_pin_data.expected_);
             status_postman(_AppStatus_ManualLed_);
+            device_get_info()->pin_confirmed_ = false;
+
             _pin_data.cid_      = cid;
             _pin_data.command_  = PIN_INS_CHECK;
             _pin_data.touch_ms_ = now_ms;
@@ -283,6 +290,8 @@ void pin_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
             if (_pin_data.expected_[0] != 0)
             {
                 status_postman(_AppStatus_ManualLed_);
+                device_get_info()->pin_confirmed_ = false;
+
                 _pin_data.cid_      = cid;
                 _pin_data.command_  = PIN_INS_GET;
                 _pin_data.touch_ms_ = now_ms;
@@ -300,6 +309,8 @@ void pin_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
             if ((_pin_data.expected_[0] == 0) || device_get_info()->pin_confirmed_)
             {
                 status_postman(_AppStatus_ManualLed_);
+                device_get_info()->pin_confirmed_ = false;
+
                 _pin_data.cid_      = cid;
                 _pin_data.command_  = PIN_INS_SET;
                 _pin_data.touch_ms_ = now_ms;

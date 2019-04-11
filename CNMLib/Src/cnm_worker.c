@@ -15,8 +15,6 @@
 // IDLE worker
 /* ****************************************************************************************************************** */
 
-#ifndef WORKER_WITHOUT_WAKEUP
-
 struct IdleData
 {
     uint32_t    last_sec_;
@@ -57,13 +55,11 @@ static void idle_worker(uint32_t now_ms, uint32_t worker_ms, void *param)
     }
 }
 
-#endif  // WORKER_WITHOUT_WAKEUP
-
 /* ****************************************************************************************************************** */
 // WORKER
 /* ****************************************************************************************************************** */
 
-#define MAX_YIELDS      2
+#define MAX_YIELDS      1
 
 struct WorkerContext
 {
@@ -86,18 +82,14 @@ static list_head    _worker_list;
 
 /* ****************************************************************************************************************** */
 
-#ifndef WORKER_WITHOUT_WAKEUP
-
 static void need_yield(WorkerContext *ctx)
 {
-    if ((ctx->prio_ != _WorkerPrio_Idle_) && (++ctx->n_yield_ >= MAX_YIELDS))
+    if ((ctx->prio_ != _WorkerPrio_Idle_) && (ctx->n_yield_++ >= MAX_YIELDS))
     {
         ctx->dyn_prio_++;
         ctx->n_yield_ = 0;
     }
 }
-
-#endif  // WORKER_WITHOUT_WAKEUP
 
 void worker_init(void)
 {
@@ -154,11 +146,14 @@ void worker_exec(void)
 
     /* exec worker */
 
-    select->worker_(now_ms, select->worker_ms_, select->param_);
+    if (select)
+    {
+        select->worker_(now_ms, select->worker_ms_, select->param_);
 
-    select->dyn_prio_  = select->prio_;
-    select->n_yield_   = 0;
-    select->worker_ms_ = now_ms;
+        select->dyn_prio_  = select->prio_;
+        select->n_yield_   = 0;
+        select->worker_ms_ = now_ms;
+    }
 }
 
 int8_t worker_usage(void)
