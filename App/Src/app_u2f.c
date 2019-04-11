@@ -495,7 +495,7 @@ void u2f_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
         {
         case U2F_REGISTER:
 
-            try_registration(&_u2f_data, dat, len, now_ms);
+            try_registration(&_u2f_data, request->dat_, len, now_ms);
             break;
 
         case U2F_AUTHENTICATE:
@@ -503,11 +503,11 @@ void u2f_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
             switch (request->p1_)
             {
             case CHECK_ONLY:
-                check_registration(&_u2f_data, dat, len);
+                check_registration(&_u2f_data, request->dat_, len);
                 break;
             case ENFORCE_USER_PRESENCE_AND_SIGN:
             case DONT_ENFORCE_USER_PRESENCE_AND_SIGN:
-                try_authenticate(&_u2f_data, dat, len, now_ms);
+                try_authenticate(&_u2f_data, request->dat_, len, now_ms);
                 break;
             default:
                 hidif_append_sw(FIDO_SW_WRONG_DATA);
