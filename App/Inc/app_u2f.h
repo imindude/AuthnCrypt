@@ -6,8 +6,8 @@
  * *********************************************************************************************************************
  */
 
-#ifndef APP_PINIF_H
-#define APP_PINIF_H
+#ifndef APP_U2F_H
+#define APP_U2F_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,9 +21,9 @@ extern "C" {
 
 /* ****************************************************************************************************************** */
 
-void    pinif_init(void);
-void    pinif_reset(void);
-bool    pinif_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms);
+void    u2f_init(void);
+void    u2f_reset(void);
+void    u2f_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms);
 
 /* ****************************************************************************************************************** */
 
@@ -31,6 +31,6 @@ bool    pinif_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
 }
 #endif
 
-#endif  /* APP_PINIF_H */
+#endif  /* APP_U2F_H */
 
 /* end of file ****************************************************************************************************** */

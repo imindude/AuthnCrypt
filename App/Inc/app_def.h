@@ -11,17 +11,18 @@
 
 /* ****************************************************************************************************************** */
 
-#define VERSION_MAJOR       0
-#define VERSION_MINOR       1
+#define VERSION_MAJOR       1
+#define VERSION_MINOR       0
 #ifndef RELEASE
-#define BUILD_NUMBER        0
+#define BUILD_NUMBER        1
 #endif
 
 /* ****************************************************************************************************************** */
 
 #define PIN_CLASS                   0x54
-#define PIN_INS_GET                 0x10
-#define PIN_INS_SET                 0x11
+#define PIN_INS_CHECK               0x10
+#define PIN_INS_GET                 0x11
+#define PIN_INS_SET                 0x12
 
 #define PIN_SW_NO_ERROR             0x9000
 #define PIN_SW_VERIFY_FAILED        0x9004

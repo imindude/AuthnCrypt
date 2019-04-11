@@ -28,7 +28,7 @@ void rng_bytes(uint8_t *dst, uint32_t len)
         uint8_t     byte_[4];
     }
     digit;
-    uint32_t    n = len % 4;
+    uint32_t    n = len / 4;
     uint32_t    i;
 
     for (i = 0; i < n; i++)
@@ -37,6 +37,7 @@ void rng_bytes(uint8_t *dst, uint32_t len)
         *(uint32_t*)(&dst[4 * i]) = digit.word_;
     }
 
+    n = len % 4;
     if (n > 0)
     {
         HAL_RNG_GenerateRandomNumber(&hrng, &digit.word_);

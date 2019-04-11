@@ -41,9 +41,12 @@ extern "C" {
 
 /* ****************************************************************************************************************** */
 
-void    hidif_init(void);
-void    hidif_write(uint32_t cid, uint8_t cmd, uint8_t *dat, uint16_t len);
-void    hidif_send_error(uint32_t cid, uint8_t code);
+void        hidif_init(void);
+uint16_t    hidif_add_byte(uint8_t byte);
+uint16_t    hidif_add_bytes(uint8_t *bytes, uint16_t size);
+uint16_t    hidif_append_sw(uint16_t sw);
+void        hidif_write(uint32_t cid, uint8_t cmd);
+void        hidif_error(uint32_t cid, uint8_t code);
 
 /* ****************************************************************************************************************** */
 

@@ -8,7 +8,7 @@
 
 #include <string.h>
 #include "app_status.h"
-#include "app_pinif.h"
+#include "app_pin.h"
 #include "cnm_worker.h"
 #include "hwl_led.h"
 
@@ -154,8 +154,13 @@ void status_reset(void)
 bool status_postman(AppStatus status)
 {
     memset(&_status_data, 0, sizeof(StatusData));
-    _status_data.status_  = status;
+    _status_data.status_ = status;
     return true;
+}
+
+AppStatus status_get(void)
+{
+    return _status_data.status_;
 }
 
 bool status_manual_led(bool on)
@@ -163,6 +168,7 @@ bool status_manual_led(bool on)
     if (_status_data.status_ == _AppStatus_ManualLed_)
     {
         _status_data.blinky_on_ = on ? 100 : 0;
+        led_red(_status_data.blinky_on_);
         return true;
     }
 

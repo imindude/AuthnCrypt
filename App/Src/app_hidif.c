@@ -9,9 +9,10 @@
 #include <string.h>
 #include "app_hidif.h"
 #include "app_def.h"
+#include "app_pin.h"
 #include "app_status.h"
 #include "app_device.h"
-#include "app_pinif.h"
+#include "app_u2f.h"
 #include "hwl_hid.h"
 #include "hwl_rng.h"
 #include "cnm_worker.h"
@@ -20,8 +21,7 @@
 
 /* ****************************************************************************************************************** */
 
-#define HIDIF_CONT_TIMEOUT_MS       100
-#define HIDIF_USER_WAIT_MS          30000
+#define HIDIF_CONT_TIMEOUT_MS       500
 
 #define HIDIF_INIT_DATA_SIZE        (HID_PACKET_SIZE - 7)   // channel id + command + length
 #define HIDIF_CONT_DATA_SIZE        (HID_PACKET_SIZE - 5)   // channel id + sequence
@@ -99,21 +99,17 @@ static HidifData   _hidif_data;
 
 static void process_msg(HidifChannel *channel, uint32_t now_ms)
 {
-//    bool    keepalive = u2f_request(channel->buffer_, channel->rxlen_);
-//
-//    if (ba_hidif.size() > 0)
-//        hidif_write(HIDIF_MSG, ba_hidif.head(), ba_hidif.size());
-//
-//    return keepalive;
+    u2f_postman(channel->cid_, channel->buffer_, channel->rxlen_, now_ms);
 }
 
 static void process_cbor(HidifChannel *channel, uint32_t now_ms)
 {
+    hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
 }
 
 static void process_pin(HidifChannel *channel, uint32_t now_ms)
 {
-    pinif_postman(channel->cid_, channel->buffer_, channel->rxlen_, now_ms);
+    pin_postman(channel->cid_, channel->buffer_, channel->rxlen_, now_ms);
 }
 
 static void process_cipher(HidifChannel *channel, uint32_t now_ms)
@@ -122,14 +118,15 @@ static void process_cipher(HidifChannel *channel, uint32_t now_ms)
 
 static void process_ping(HidifChannel *channel, uint32_t now_ms)
 {
-    ba_hidif.add_bytes(channel->buffer_, channel->rxlen_);
-    hidif_write(channel->cid_, HIDIF_PING, ba_hidif.head(), ba_hidif.size());
+    hidif_add_bytes(channel->buffer_, channel->rxlen_);
+    hidif_write(channel->cid_, HIDIF_PING);
 }
 
 static void process_lock(HidifChannel *channel, uint32_t now_ms)
 {
     channel->lock_ms_ = now_ms + channel->buffer_[0] * 1000;
-    hidif_write(channel->cid_, HIDIF_LOCK, NULL, 0);
+    hidif_add_byte(0);      // dummy - workaround
+    hidif_write(channel->cid_, HIDIF_LOCK);
 }
 
 static void process_init(HidifChannel *channel, uint32_t now_ms)
@@ -140,32 +137,32 @@ static void process_init(HidifChannel *channel, uint32_t now_ms)
     if (cid == HIDIF_BROADCAST_CID)
         rng_words(&cid, 1);
 
-    ba_hidif.add_bytes(channel->buffer_, 8);
-    ba_hidif.add_bytes((uint8_t*)&cid, 4);
-    ba_hidif.add_byte(HIDIF_PROTOCOL_VERSION);
-    ba_hidif.add_byte(device_info->ver_.major_);
-    ba_hidif.add_byte(device_info->ver_.minor_);
-    ba_hidif.add_byte(device_info->ver_.build_ & 0xFF);
-    ba_hidif.add_byte(FIDO_CAPABILITIES);
+    hidif_add_bytes(channel->buffer_, 8);
+    hidif_add_bytes((uint8_t*)&cid, 4);
+    hidif_add_byte(HIDIF_PROTOCOL_VERSION);
+    hidif_add_byte(device_info->ver_.major_);
+    hidif_add_byte(device_info->ver_.minor_);
+    hidif_add_byte(device_info->ver_.build_ & 0xFF);
+    hidif_add_byte(FIDO_CAPABILITIES);
 
-    hidif_write(channel->cid_, HIDIF_INIT, ba_hidif.head(), ba_hidif.size());
+    hidif_write(channel->cid_, HIDIF_INIT);
 
-    if (cid == HIDIF_BROADCAST_CID)
-        channel->cid_ = cid;
+    channel->cid_ = cid;
 }
 
 static void process_wink(HidifChannel *channel, uint32_t now_ms)
 {
     status_postman(_AppStatus_Busy_);
-    hidif_write(channel->cid_, HIDIF_WINK, NULL, 0);
+    hidif_add_byte(0);      // dummy - workaround
+    hidif_write(channel->cid_, HIDIF_WINK);
 }
 
 static void process_cancel(HidifChannel *channel, uint32_t now_ms)
 {
     status_postman(_AppStatus_Idle_);
 
-    pinif_reset();
-    // u2fif_reset();
+    pin_reset();
+    u2f_reset();
     // authnif_reset();
     // cipherif_reset();
 
@@ -204,15 +201,17 @@ static void message_process(HidifChannel *channel, uint32_t now_ms)
         process_cancel(channel, now_ms);
         break;
     default:
-        hidif_send_error(channel->cid_, FIDO_ERR_INVALID_COMMAND);
+        hidif_error(channel->cid_, FIDO_ERR_INVALID_COMMAND);
         break;
     }
 }
 
 static bool process_timeout(HidifChannel *channel, uint32_t now_ms)
 {
-    if (channel->tout_ms_ > now_ms)
+    if ((channel->tout_ms_ != 0) && (now_ms > channel->tout_ms_))
     {
+        hidif_error(channel->cid_, FIDO_ERR_TIMEOUT);
+
         channel->tout_ms_ = 0;
         channel->rxseq_ = 0;
         channel->rxlen_ = 0;
@@ -238,95 +237,99 @@ static void worker_func(uint32_t now_ms, uint32_t worker_ms, void *param)
     HidifPacket     packet;
     bool            message_ready = false;
 
-    while (hid_recv(packet.stream_, sizeof(HidifPacket)) > 0)
+    do
     {
-        if (packet.packet_.cid_ == HIDIF_INVALID_CID)
-            break;
-
-        if (channel->cid_ != packet.packet_.cid_)
+        if (hid_recv(packet.stream_, sizeof(HidifPacket)) > 0)
         {
-            if (channel->lock_ms_ > now_ms)
-            {
-                hidif_send_error(packet.packet_.cid_, FIDO_ERR_OTHER);
+            if (packet.packet_.cid_ == HIDIF_INVALID_CID)
                 break;
-            }
 
-            channel->cid_ = packet.packet_.cid_;
-            channel->lock_ms_ = 0;
-            channel->tout_ms_ = 0;
-            channel->rxpos_ = 0;
-            channel->rxlen_ = 0;
-        }
-
-        if (channel->rxpos_ == 0)
-        {
-            /* INIT packet */
-
-            if (IS_INIT_PACKET(packet.packet_.init_.cmd_))
+            if (channel->cid_ != packet.packet_.cid_)
             {
-                HidifInitPacket *init_packet = &packet.packet_.init_;
-                uint16_t        len = GET_LEN(init_packet->bcnth_, init_packet->bcntl_);
-
-                channel->rxcmd_ = GET_CMD(init_packet->cmd_);
-                channel->rxseq_ = 0;
-                channel->rxlen_ = len;
-
-                if (len > HIDIF_INIT_DATA_SIZE)
-                    len = HIDIF_INIT_DATA_SIZE;
-                memcpy(channel->buffer_, init_packet->data_, HIDIF_INIT_DATA_SIZE);
-                channel->rxpos_ = len;
-
-                if (channel->rxpos_ >= channel->rxlen_)
+                if (channel->lock_ms_ > now_ms)
                 {
-                    message_ready = true;
+                    hidif_error(packet.packet_.cid_, FIDO_ERR_OTHER);
                     break;
                 }
 
-                channel->tout_ms_ = now_ms + HIDIF_CONT_TIMEOUT_MS;
+                channel->cid_ = packet.packet_.cid_;
+                channel->lock_ms_ = 0;
+                channel->tout_ms_ = 0;
+                channel->rxpos_ = 0;
+                channel->rxlen_ = 0;
+            }
+
+            if (channel->rxpos_ == 0)
+            {
+                /* INIT packet */
+
+                if (IS_INIT_PACKET(packet.packet_.init_.cmd_))
+                {
+                    HidifInitPacket *init_packet = &packet.packet_.init_;
+                    uint16_t        len = GET_LEN(init_packet->bcnth_, init_packet->bcntl_);
+
+                    channel->rxcmd_ = GET_CMD(init_packet->cmd_);
+                    channel->rxseq_ = 0;
+                    channel->rxlen_ = len;
+
+                    if (len > HIDIF_INIT_DATA_SIZE)
+                        len = HIDIF_INIT_DATA_SIZE;
+                    memcpy(channel->buffer_, init_packet->data_, HIDIF_INIT_DATA_SIZE);
+                    channel->rxpos_ = len;
+
+                    if (channel->rxpos_ >= channel->rxlen_)
+                    {
+                        message_ready = true;
+                        break;
+                    }
+
+                    channel->tout_ms_ = now_ms + HIDIF_CONT_TIMEOUT_MS;
+                }
+                else
+                {
+                    hidif_error(channel->cid_, FIDO_ERR_INVALID_PARAMETER);
+                    break;
+                }
             }
             else
             {
-                hidif_send_error(channel->cid_, FIDO_ERR_INVALID_PARAMETER);
-                break;
-            }
-        }
-        else
-        {
-            /* CONT packet */
+                /* CONT packet */
 
-            if (IS_CONT_PACKET(packet.packet_.cont_.seq_no_))
-            {
-                HidifContPacket *cont_packet = &packet.packet_.cont_;
-
-                if (cont_packet->seq_no_ != channel->rxseq_)
+                if (IS_CONT_PACKET(packet.packet_.cont_.seq_no_))
                 {
-                    hidif_send_error(channel->cid_, FIDO_ERR_INVALID_SEQ);
+                    HidifContPacket *cont_packet = &packet.packet_.cont_;
+
+                    if (cont_packet->seq_no_ != channel->rxseq_)
+                    {
+                        hidif_error(channel->cid_, FIDO_ERR_INVALID_SEQ);
+                        break;
+                    }
+
+                    uint16_t    len = channel->rxpos_ + HIDIF_CONT_DATA_SIZE;
+
+                    if (len > channel->rxlen_)
+                        len = channel->rxlen_;
+                    memcpy(channel->buffer_ + channel->rxpos_, cont_packet->data_, HIDIF_CONT_DATA_SIZE);
+                    channel->rxpos_ = len;
+
+                    if (channel->rxpos_ >= channel->rxlen_)
+                    {
+                        message_ready = true;
+                        break;
+                    }
+
+                    channel->rxseq_++;
+                    channel->tout_ms_ = now_ms + HIDIF_CONT_TIMEOUT_MS;
+                }
+                else
+                {
+                    hidif_error(channel->cid_, FIDO_ERR_INVALID_PARAMETER);
                     break;
                 }
-
-                uint16_t    len = channel->rxpos_ + HIDIF_CONT_DATA_SIZE;
-
-                if (len > channel->rxlen_)
-                    len = channel->rxlen_;
-                memcpy(channel->buffer_ + channel->rxpos_, cont_packet->data_, HIDIF_CONT_DATA_SIZE);
-                channel->rxpos_ = len;
-
-                if (channel->rxpos_ >= channel->rxlen_)
-                {
-                    message_ready = true;
-                    break;
-                }
-
-                channel->rxseq_++;
-                channel->tout_ms_ = now_ms + HIDIF_CONT_TIMEOUT_MS;
-            }
-            else
-            {
-                hidif_send_error(channel->cid_, FIDO_ERR_INVALID_PARAMETER);
-                break;
             }
         }
     }
+    while (0);
 
     if (message_ready)
     {
@@ -344,10 +347,32 @@ void hidif_init(void)
     worker_join(wakeup_func, worker_func, _WorkerPrio_UserHigh_, &_hidif_data);
 }
 
-void hidif_write(uint32_t cid, uint8_t cmd, uint8_t *dat, uint16_t len)
+uint16_t hidif_add_byte(uint8_t byte)
 {
-    if ((cid != HIDIF_INVALID_CID) && (cid == _hidif_data.channel_.cid_))
+    return ba_hidif.add_byte(byte);
+}
+
+uint16_t hidif_add_bytes(uint8_t *bytes, uint16_t size)
+{
+    return ba_hidif.add_bytes(bytes, size);
+}
+
+uint16_t hidif_append_sw(uint16_t sw)
+{
+    uint16_t    size = 0;
+
+    size = hidif_add_byte(sw >> 8 & 0xFF);
+    size = hidif_add_byte(sw >> 0 & 0xFF);
+
+    return size;
+}
+
+void hidif_write(uint32_t cid, uint8_t cmd)
+{
+    if ((ba_hidif.size() > 0) && (cid == _hidif_data.channel_.cid_))
     {
+        uint8_t         *dat = ba_hidif.head();
+        uint16_t        len = ba_hidif.size();
         HidifPacket     packet;
         HidifInitPacket *init_packet = &packet.packet_.init_;
         uint16_t        pos = 0;
@@ -390,11 +415,16 @@ void hidif_write(uint32_t cid, uint8_t cmd, uint8_t *dat, uint16_t len)
             }
         }
     }
+
+    ba_hidif.flush();
 }
 
-void hidif_send_error(uint32_t cid, uint8_t code)
+void hidif_error(uint32_t cid, uint8_t code)
 {
-    hidif_write(cid, HIDIF_ERROR, &code, 1);
+    ba_hidif.flush();
+
+    hidif_add_byte(code);
+    hidif_write(cid, HIDIF_ERROR);
 }
 
 /* end of file ****************************************************************************************************** */

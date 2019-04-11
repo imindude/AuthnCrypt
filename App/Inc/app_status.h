@@ -31,10 +31,11 @@ typedef enum AppStatus  AppStatus;
 
 /* ****************************************************************************************************************** */
 
-void    status_init(void);
-void    status_reset(void);
-bool    status_postman(AppStatus status);
-bool    status_manual_led(bool on);
+void        status_init(void);
+void        status_reset(void);
+bool        status_postman(AppStatus status);
+AppStatus   status_get(void);
+bool        status_manual_led(bool on);
 
 /* ****************************************************************************************************************** */
 

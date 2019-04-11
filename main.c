@@ -14,7 +14,8 @@
 #include "cnm_worker.h"
 #include "app_device.h"
 #include "app_status.h"
-#include "app_pinif.h"
+#include "app_pin.h"
+#include "app_u2f.h"
 #include "app_hidif.h"
 
 /* ****************************************************************************************************************** */
@@ -32,7 +33,8 @@ int main(void)
 
     device_init();
     status_init();
-    pinif_init();
+    pin_init();
+    u2f_init();
     hidif_init();
 
     while (1)

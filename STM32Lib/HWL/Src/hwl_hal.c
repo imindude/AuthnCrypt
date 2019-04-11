@@ -155,7 +155,7 @@ void HAL_PCD_MspInit(PCD_HandleTypeDef *h)
 
         GPIO_InitTypeDef gpio_init_param =
         {
-                .Pin       = GPIO_PIN_11 | GPIO_PIN_12,
+                .Pin       = GPIO_PIN_12,
                 .Mode      = GPIO_MODE_OUTPUT_OD,
                 .Pull      = GPIO_NOPULL,
                 .Speed     = GPIO_SPEED_FREQ_LOW,

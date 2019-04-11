@@ -93,12 +93,12 @@
  * Status code
  */
 
-#define SW_NO_ERROR                     0x9000
-#define SW_CONDITINOS_NOT_SATISFIED     0x6985
-#define SW_WRONG_DATA                   0x6A80
-#define SW_WRONG_LENGTH                 0x6700
-#define SW_CLA_NOT_SUPPORTED            0x6E00
-#define SW_INS_NOT_SUPPORTED            0x6D00
+#define FIDO_SW_NO_ERROR                    0x9000
+#define FIDO_SW_CONDITINOS_NOT_SATISFIED    0x6985
+#define FIDO_SW_WRONG_DATA                  0x6A80
+#define FIDO_SW_WRONG_LENGTH                0x6700
+#define FIDO_SW_CLA_NOT_SUPPORTED           0x6E00
+#define FIDO_SW_INS_NOT_SUPPORTED           0x6D00
 
 /**
  * Authenticate operation code

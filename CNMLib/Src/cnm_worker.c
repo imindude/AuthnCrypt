@@ -15,29 +15,31 @@
 // IDLE worker
 /* ****************************************************************************************************************** */
 
-struct IdleLocalData
+#ifndef WORKER_WITHOUT_WAKEUP
+
+struct IdleData
 {
     uint32_t    last_sec_;
     uint32_t    last_msec_;
     uint32_t    idle_count_;
     int8_t      idle_rate_;
 };
-typedef struct IdleLocalData    IdleLocalData;
+typedef struct IdleData     IdleData;
 
 /* ****************************************************************************************************************** */
 
-static IdleLocalData    _idle_localdata;
+static IdleData    _idle_data;
 
 /* ****************************************************************************************************************** */
 
-static bool idle_wakeup(uint32_t now_ms, uint32_t last_exec_ms, void *param)
+static bool idle_wakeup(uint32_t now_ms, uint32_t wakeup_ms, uint32_t worker_ms, void *param)
 {
     return true;
 }
 
-static void idle_worker(uint32_t now_ms, uint32_t last_exec_ms, void *param)
+static void idle_worker(uint32_t now_ms, uint32_t worker_ms, void *param)
 {
-    IdleLocalData   *this = (IdleLocalData*)param;
+    IdleData    *this = (IdleData*)param;
 
     if (now_ms != this->last_msec_)
     {
@@ -55,11 +57,13 @@ static void idle_worker(uint32_t now_ms, uint32_t last_exec_ms, void *param)
     }
 }
 
+#endif  // WORKER_WITHOUT_WAKEUP
+
 /* ****************************************************************************************************************** */
 // WORKER
 /* ****************************************************************************************************************** */
 
-#define MAX_YIELDS      3
+#define MAX_YIELDS      2
 
 struct WorkerContext
 {
@@ -67,12 +71,12 @@ struct WorkerContext
 
     WakeupFunc  wakeup_;
     WorkerFunc  worker_;
-    WorkerPrio  prio_;
     void        *param_;
+    uint32_t    worker_ms_;
+    uint32_t    wakeup_ms_;
+    WorkerPrio  prio_;
     int8_t      dyn_prio_;
     int8_t      n_yield_;
-    uint32_t    wakeup_ms_;
-    uint32_t    worker_ms_;
 };
 typedef struct WorkerContext    WorkerContext;
 
@@ -82,20 +86,24 @@ static list_head    _worker_list;
 
 /* ****************************************************************************************************************** */
 
+#ifndef WORKER_WITHOUT_WAKEUP
+
 static void need_yield(WorkerContext *ctx)
 {
-    if ((ctx->prio_ != _WorkerPrio_Idle_) && (++ctx->n_yield_ > MAX_YIELDS))
+    if ((ctx->prio_ != _WorkerPrio_Idle_) && (++ctx->n_yield_ >= MAX_YIELDS))
     {
         ctx->dyn_prio_++;
         ctx->n_yield_ = 0;
     }
 }
 
+#endif  // WORKER_WITHOUT_WAKEUP
+
 void worker_init(void)
 {
     INIT_LIST_HEAD(&_worker_list);
 
-    worker_join(idle_wakeup, idle_worker, _WorkerPrio_Idle_, &_idle_localdata);
+    worker_join(idle_wakeup, idle_worker, _WorkerPrio_Idle_, &_idle_data);
 }
 
 void worker_join(WakeupFunc wakeup, WorkerFunc worker, WorkerPrio prio, void *param)
@@ -106,16 +114,16 @@ void worker_join(WakeupFunc wakeup, WorkerFunc worker, WorkerPrio prio, void *pa
 
     ctx->wakeup_   = wakeup;
     ctx->worker_   = worker;
-    ctx->prio_     = prio;
     ctx->param_    = param;
+    ctx->prio_     = prio;
     ctx->dyn_prio_ = prio;
 }
 
 void worker_exec(void)
 {
-    WorkerContext   *select = NULL;
-    WorkerContext   *choose, *tmp;
     uint32_t        now_ms = get_millis();
+    WorkerContext   *choose, *tmp;
+    WorkerContext   *select = NULL;
 
     list_for_each_entry_safe(choose, tmp, &_worker_list, list_)
     {
@@ -155,7 +163,7 @@ void worker_exec(void)
 
 int8_t worker_usage(void)
 {
-    return _idle_localdata.idle_rate_;
+    return _idle_data.idle_rate_;
 }
 
 /* end of file ****************************************************************************************************** */

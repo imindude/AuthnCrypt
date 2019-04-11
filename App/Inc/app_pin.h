@@ -2,12 +2,12 @@
  * *********************************************************************************************************************
  * @title       Authn & Crypt
  * @author      imindude@gmail.com
- * @note        Copy & Make Common Library
+ * @note        Application Code
  * *********************************************************************************************************************
  */
 
-#ifndef CNM_WORKER_H
-#define CNM_WORKER_H
+#ifndef APP_PIN_H
+#define APP_PIN_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,28 +21,9 @@ extern "C" {
 
 /* ****************************************************************************************************************** */
 
-//#define WORKER_WITHOUT_WAKEUP
-
-/* ****************************************************************************************************************** */
-
-enum WorkerPrio
-{
-    _WorkerPrio_Idle_,
-    _WorkerPrio_UserLow_,
-    _WorkerPrio_UserMid_,
-    _WorkerPrio_UserHigh_,
-};
-typedef enum WorkerPrio     WorkerPrio;
-
-typedef bool    (*WakeupFunc)(uint32_t now_ms, uint32_t wakeup_ms, uint32_t worker_ms, void *param);
-typedef void    (*WorkerFunc)(uint32_t now_ms, uint32_t worker_ms, void *param);
-
-/* ****************************************************************************************************************** */
-
-void    worker_init(void);
-void    worker_join(WakeupFunc wakeup, WorkerFunc worker, WorkerPrio prio, void *param);
-void    worker_exec(void);
-int8_t  worker_usage(void);
+void    pin_init(void);
+void    pin_reset(void);
+void    pin_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms);
 
 /* ****************************************************************************************************************** */
 
@@ -50,6 +31,6 @@ int8_t  worker_usage(void);
 }
 #endif
 
-#endif  /* CNM_WORKER_H */
+#endif  /* APP_PIN_H */
 
 /* end of file ****************************************************************************************************** */

@@ -21,12 +21,14 @@ extern "C" {
 
 /* ****************************************************************************************************************** */
 
+#define DEVICE_UID_SIZE     32
+
 struct DeviceInfo
 {
     union
     {
         uint32_t    words_[3];
-        uint8_t     bytes_[12];
+        uint8_t     bytes_[DEVICE_UID_SIZE];
     }
     uid_;
 
@@ -46,6 +48,10 @@ typedef struct DeviceInfo   DeviceInfo;
 
 void        device_init(void);
 DeviceInfo* device_get_info(void);
+uint8_t*    device_get_fido_key(uint16_t *size);
+uint8_t*    device_get_fido_cert(uint16_t *size);
+uint32_t    device_get_counter(void);
+int         device_mbedtls_rng(void *handle, unsigned char *output, size_t len);
 
 /* ****************************************************************************************************************** */
 

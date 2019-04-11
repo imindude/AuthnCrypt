@@ -8,8 +8,7 @@
 
 #include "usbd_hid.h"
 #include "usbd_ctlreq.h"
-
-#include "../../../CNMLib/Inc/cnm_buffer.h"
+#include "cnm_buffer.h"
 
 /* ****************************************************************************************************************** */
 
@@ -44,8 +43,7 @@ static uint8_t  USBD_HID_CfgFSDesc[USB_HID_CONFIG_DESC_SIZ] =
         0x00,                           /*bCountryCode: Hardware target country*/
         0x01,                           /*bNumDescriptors: Number of HID class descriptors to follow*/
         0x22,                           /*bDescriptorType*/
-        USB_HID_REPORT_DESC_SIZE,       /*wItemLength: Total length of Report descriptor*/
-        0x00,
+        USB_HID_REPORT_DESC_SIZE, 0x00, /*wItemLength: Total length of Report descriptor*/
         /* Descriptor of EPI endpoint [27] */
         0x07,                           /*bLength: Endpoint Descriptor size*/
         USB_DESC_TYPE_ENDPOINT,         /*bDescriptorType:*/
@@ -70,8 +68,7 @@ static uint8_t  USBD_HID_Desc[USB_HID_DESC_SIZ] =
         0x00,                           /*bCountryCode: Hardware target country*/
         0x01,                           /*bNumDescriptors: Number of HID class descriptors to follow*/
         0x22,                           /*bDescriptorType*/
-        USB_HID_REPORT_DESC_SIZE,       /*wItemLength: Total length of Report descriptor*/
-        0x00,
+        USB_HID_REPORT_DESC_SIZE, 0x00, /*wItemLength: Total length of Report descriptor*/
 };
 
 static uint8_t  USBD_HID_DeviceQualifierDesc[USB_LEN_DEV_QUALIFIER_DESC] =
@@ -111,9 +108,9 @@ static uint8_t  USBD_HID_ReportDesc[USB_HID_REPORT_DESC_SIZE] =
         0xC0,                   // END COLLECTION
 };
 
-static uint8_t  _usbd_hid_rxbuf[HID_EPO_SIZE];
-
 #pragma pack(pop)
+
+static uint8_t  _usbd_hid_rxbuf[HID_EPO_SIZE];
 
 /* ****************************************************************************************************************** */
 
@@ -311,7 +308,7 @@ uint8_t USBD_HID_SendReport(USBD_HandleTypeDef *pdev, uint8_t *report, uint16_t 
         }
     }
 
-    return USBD_FAIL;
+    return USBD_BUSY;
 }
 
 void USBD_HID_RecvCallback(USBD_HandleTypeDef *pdev, uint8_t epnum)
