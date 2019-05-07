@@ -6,8 +6,7 @@
  * *********************************************************************************************************************
  */
 
-#ifndef CNM_WORKER_H
-#define CNM_WORKER_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -45,7 +44,5 @@ int8_t  worker_usage(void);
 #ifdef __cplusplus
 }
 #endif
-
-#endif  /* CNM_WORKER_H */
 
 /* end of file ****************************************************************************************************** */

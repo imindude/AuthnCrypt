@@ -15,7 +15,7 @@
 #include "app_device.h"
 #include "app_status.h"
 #include "app_pin.h"
-#include "app_u2f.h"
+#include "app_ctap1.h"
 #include "app_hidif.h"
 
 /* ****************************************************************************************************************** */
@@ -34,7 +34,7 @@ int main(void)
     device_init();
     status_init();
     pin_init();
-    u2f_init();
+    ctap1_init();
     hidif_init();
 
     while (1)

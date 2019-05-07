@@ -6,8 +6,7 @@
  * *********************************************************************************************************************
  */
 
-#ifndef CNM_BUFFER_H
-#define CNM_BUFFER_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -56,7 +55,5 @@ DEFINE_BYTEARRAY(hidif);
 #ifdef __cplusplus
 }
 #endif
-
-#endif  /* CNM_BUFFER_H */
 
 /* end of file ****************************************************************************************************** */

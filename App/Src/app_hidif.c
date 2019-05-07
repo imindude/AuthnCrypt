@@ -6,13 +6,13 @@
  * *********************************************************************************************************************
  */
 
+#include <app_ctap1.h>
 #include <string.h>
 #include "app_hidif.h"
 #include "app_def.h"
 #include "app_pin.h"
 #include "app_status.h"
 #include "app_device.h"
-#include "app_u2f.h"
 #include "hwl_hid.h"
 #include "hwl_rng.h"
 #include "cnm_worker.h"
@@ -99,12 +99,19 @@ static HidifData   _hidif_data;
 
 static void process_msg(HidifChannel *channel, uint32_t now_ms)
 {
-    u2f_postman(channel->cid_, channel->buffer_, channel->rxlen_, now_ms);
+    if (FIDO_CAPABILITIES & FIDO_CAPABILITY_NMSG)
+        hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
+    else
+        ctap1_postman(channel->cid_, channel->buffer_, channel->rxlen_, now_ms);
 }
 
 static void process_cbor(HidifChannel *channel, uint32_t now_ms)
 {
-    hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
+    if (FIDO_CAPABILITIES & FIDO_CAPABILITY_CBOR)
+        // do something or
+        hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
+    else
+        hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
 }
 
 static void process_pin(HidifChannel *channel, uint32_t now_ms)
@@ -152,9 +159,16 @@ static void process_init(HidifChannel *channel, uint32_t now_ms)
 
 static void process_wink(HidifChannel *channel, uint32_t now_ms)
 {
-    status_postman(_AppStatus_Busy_);
-    hidif_add_byte(0);      // dummy - workaround
-    hidif_write(channel->cid_, HIDIF_WINK);
+    if (FIDO_CAPABILITIES & FIDO_CAPABILITY_WINK)
+    {
+        status_postman(_AppStatus_Busy_);
+        hidif_add_byte(0);      // dummy - workaround
+        hidif_write(channel->cid_, HIDIF_WINK);
+    }
+    else
+    {
+        hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
+    }
 }
 
 static void process_cancel(HidifChannel *channel, uint32_t now_ms)
@@ -162,7 +176,7 @@ static void process_cancel(HidifChannel *channel, uint32_t now_ms)
     status_postman(_AppStatus_Idle_);
 
     pin_reset();
-    u2f_reset();
+    ctap1_reset();
     // authnif_reset();
     // cipherif_reset();
 

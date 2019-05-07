@@ -114,10 +114,10 @@ void worker_join(WakeupFunc wakeup, WorkerFunc worker, WorkerPrio prio, void *pa
 void worker_exec(void)
 {
     uint32_t        now_ms = get_millis();
-    WorkerContext   *choose, *tmp;
+    WorkerContext   *choose;
     WorkerContext   *select = NULL;
 
-    list_for_each_entry_safe(choose, tmp, &_worker_list, list_)
+    list_for_each_entry(choose, &_worker_list, list_)
     {
         /* check wakeup */
 

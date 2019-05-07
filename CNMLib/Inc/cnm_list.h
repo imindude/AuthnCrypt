@@ -6,8 +6,7 @@
  * *********************************************************************************************************************
  */
 
-#ifndef CNM_LIST_H
-#define CNM_LIST_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -388,7 +387,5 @@ static inline void hlist_add_after(struct hlist_node *n, struct hlist_node *next
 #ifdef __cplusplus
 }
 #endif
-
-#endif  /* CNM_LIST_H */
 
 /* end of file ****************************************************************************************************** */

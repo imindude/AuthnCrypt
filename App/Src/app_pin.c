@@ -63,7 +63,7 @@ static PinData      _pin_data;
  */
 static uint8_t  _pin_buffer[PIN_MAX_TOUCHES] =
 {
-#if 1
+#if 0
         PIN_DOT_VAL,
         PIN_DOT_VAL,
         PIN_DOT_VAL,

@@ -6,8 +6,7 @@
  * *********************************************************************************************************************
  */
 
-#ifndef FIDODEF_H
-#define FIDODEF_H
+#pragma once
 
 /* ****************************************************************************************************************** */
 
@@ -84,10 +83,17 @@
  * U2F command
  */
 
-#define U2F_REGISTER                0x01
-#define U2F_AUTHENTICATE            0x02
-#define U2F_VERSION                 0x03
+#define CTAP1_REGISTER                      0x01
+#define CTAP1_AUTHENTICATE                  0x02
+#define CTAP1_VERSION                       0x03
 // vendor command (0x40 ~ 0xBF)
+
+#define CTAP1_VERSION_STR                   "U2F_V2"
+#define CTAP1_APPL_PARAM_SIZE               32
+#define CTAP1_CHAL_PARAM_SIZE               32
+#define CTAP1_KEY_SIZE                      32
+#define CTAP1_TAG_SIZE                      32
+#define CTAP1_KEY_HANDLE_SIZE               (CTAP1_KEY_SIZE + CTAP1_TAG_SIZE)
 
 /**
  * Status code
@@ -108,14 +114,237 @@
 #define ENFORCE_USER_PRESENCE_AND_SIGN          0x03
 #define DONT_ENFORCE_USER_PRESENCE_AND_SIGN     0x08
 
+/* ****************************************************************************************************************** */
+
 /**
- * FIDO Version
+ * FIDO Authenticator command
  */
 
-#define U2F_VERSION_STR         "U2F_V2"
+#define authenticatorMakeCredential         0x01
+#define authenticatorGetAssertion           0x02
+#define authenticatorGetInfo                0x04
+#define authenticatorClientPIN              0x06
+#define authenticatorReset                  0x07
+#define authenticatorGetNextAssertion       0x08
+// vendor command
+#define authenticatorVendorFirst            0x40
+#define authenticatorVendorLast             0xBF
+
+/**
+ * authenticatorMakeCredential parameters
+ */
+#define MakeCredential_clientDataHash       0x01    // required / Byte Array
+#define MakeCredential_rp                   0x02    // required / PublicKeyCredentialRpEntity
+#define MakeCredential_user                 0x03    // required / PublicKeyCredentialUserEntity
+#define MakeCredential_pubKeyCredParams     0x04    // required / CBOR Array
+#define MakeCredential_excludeList          0x05    // optional / Sequence of PublicKeyCredentialDescriptors
+#define MakeCredential_extensions           0x06    // optional / CBOR map of extension identifier
+#define MakeCredential_options              0x07    // optional / Map of authenticator options
+#define MakeCredential_pinAuth              0x08    // optional / Byte Array
+#define MakeCredential_pinProtocol          0x09    // optional / Unsigned Integer
+
+/**
+ * authenticatorMakeCredential of Response
+ */
+#define MakeCredential_authData             0x01    // required / Byte Array
+#define MakeCredential_fmt                  0x02    // required / String
+#define MakeCredential_attStmt              0x03    // required / Byte Array
+
+/**
+ * authenticatorGetAssertion parameters
+ */
+
+#define GetAssertion_rpId                   0x01    // required / String
+#define GetAssertion_clientDataHash         0x02    // required / Byte Array
+#define GetAssertion_allowList              0x03    // optional / Sequence of PublicKeyCredentialDescriptors
+#define GetAssertion_extensions             0x04    // optional / CBOR map of extension identifier
+#define GetAssertion_options                0x05    // optional / Map of authenticator options
+#define GetAssertion_pinAuth                0x06    // optional / Byte Array
+#define GetAssertion_pinProtocol            0x07    // optional / Unsigned Integer
+
+/**
+ * authenticatorGetAssertion of Response
+ */
+
+#define GetAssertion_credential             0x01    // optional / PublicKeyCredentialDescriptor
+#define GetAssertion_authData               0x02    // required / Byte Array
+#define GetAssertion_signature              0x03    // required / Byte Array
+#define GetAssertion_user                   0x04    // optional / PublicKeyCredentialUserEntity
+#define GetAssertion_numberOfCredentials    0x05    // optional / Integer
+
+/**
+ * authenticatorGetInfo of Response
+ */
+
+#define GetInfo_versions                    0x01    // required / Sequence of strings
+#define GetInfo_extensions                  0x02    // optional / Sequence of strings
+#define GetInfo_aaguid                      0x03    // required / Byte String
+#define GetInfo_options                     0x04    // optional / Map
+#define GetInfo_maxMsgSize                  0x05    // optional / Unsigned Integer
+#define GetInfo_pinProtocols                0x06    // optional / Array of Unsigned Integer
 
 /* ****************************************************************************************************************** */
 
-#endif  /* FIDODEF_H */
+/**
+ * PublicKeyCredentialType
+ */
+#define CREDENTIAL_TYPE_PUBLIC_KEY_STRING   "public-key"
+
+#define CREDENTIAL_TYPE_Unknown         0
+#define CREDENTIAL_TYPE_Public_Key      1
+#define CREDENTIAL_TYPE_CTAP1           2
+
+/**
+ * COSE key label & value parameters (RFC-8152)
+ */
+
+#define COSE_Label_kty          1   // identification of the key type
+#define COSE_Label_alg          3   // key usage restriction to this algorithm
+#define COSE_Label_crv          -1  // EC identifier
+#define COSE_Label_x            -2  // x-coordinate
+#define COSE_Label_y            -3  // y-coordinate
+#define COSE_Label_d            -4  // private key
+
+#define COSE_Value_EC2          2   // elliptic curve keys w/ x- and y- coordinate
+#define COSE_Value_P256         1   // NIST P-256 also knows as secp256r1
+#define COSE_Value_ES256        -7  // ECDSA w/ SHA256
+
+/**
+ * Extensions
+ */
+
+#define EXTENSIONS_HMAC_SECRET_KEY_AGREEMENT        0x01
+#define EXTENSIONS_HMAC_SECRET_SALT_ENC             0x02
+#define EXTENSIONS_HMAC_SECRET_SALT_AUTH            0x03
+
+/* ****************************************************************************************************************** */
+
+#pragma pack(push, 1)
+
+struct CoseKey
+{
+    int     kty_;       // COSE key type
+    int     alg_;       // COSE algorithm
+    int     crv_;       // EC identifier
+    uint8_t x_[32];     // x-coordinate
+    uint8_t y_[32];     // y-coordinate
+    uint8_t d_[32];     // private key
+};
+typedef struct CoseKey                  CoseKey;
+
+struct HmacSecretCreate
+{
+	uint8_t		nonce_[32];
+};
+typedef struct HmacSecretCreate         HmacSecretCreate;
+
+struct HmacSecretGet
+{
+	CoseKey		key_agreement_;
+	uint8_t		salt1_[32];
+	uint8_t		salt2_[32];
+	uint8_t		salt_auth_[16];
+};
+typedef struct HmacSecretGet            HmacSecretGet;
+
+struct ClientDataHashEntity
+{
+    uint8_t     hash_[32];
+};
+typedef struct ClientDataHashEntity     ClientDataHashEntity;
+
+struct RelyingPartyEntity
+{
+    char        id_[128];
+    char		name_[256];
+    char		icon_url_[256];
+};
+typedef struct RelyingPartyEntity       RelyingPartyEntity;
+
+struct UserEntity
+{
+    char        id_[128];
+    char        disp_name_[256];
+    char		user_name_[256];
+    char		icon_url_[256];
+};
+typedef struct UserEntity               UserEntity;
+
+struct PubKeyCredParamsEntity
+{
+    uint8_t     type_;      // should "public-key"
+    int32_t     cose_;      // should "-7"
+};
+typedef struct PubKeyCredParamsEntity   PubKeyCredParamsEntity;
+
+union ExtensionsEntity
+{
+    HmacSecretCreate    create_;
+    HmacSecretGet       get_;
+};
+typedef struct ExtensionsEntity         ExtensionsEntity;
+
+struct OptionsEntity
+{
+    bool        rk_;
+    bool        up_;
+    bool        uv_;
+};
+typedef struct OptionsEntity            OptionsEntity;
+
+struct PinAuthEntity
+{
+    bool        presence_;
+    bool        zero_pin_;
+    uint8_t     pin_[16];
+};
+typedef struct PinAuthEntity            PinAuthEntity;
+
+struct PinProtocolEntity
+{
+    uint32_t    version_;
+};
+typedef struct PinProtocolEntity        PinProtocolEntity;
+
+struct MakeCredential
+{
+    ClientDataHashEntity        client_data_hash_;
+    RelyingPartyEntity          relying_party_;
+    UserEntity                  user_;
+    PubKeyCredParamsEntity      pubkey_cred_param_;
+    /* "exclude list" something */
+    ExtensionsEntity            extensions_;
+    OptionsEntity               options_;
+    PinAuthEntity               pin_auth_;
+    PinProtocolEntity           pin_protocol_;
+
+    uint16_t    params_;
+};
+typedef struct MakeCredential       MakeCredential;
+
+struct CredentialId
+{
+    uint8_t     tag_[32];
+    uint8_t     nonce_[32];
+    uint8_t     rpid_hash_[32];
+    uint8_t     count_;
+};
+typedef struct CredentialId         CredentialId;
+
+struct CredentialEntity
+{
+    CredentialId    id_;
+    UserEntity      user_;
+};
+typedef struct CredentialEntity     CredentialEntity;
+
+struct CredentialDesc
+{
+    uint8_t             type_;
+    CredentialEntity    credential_;
+};
+typedef struct CredentialDesc       CredentialDesc;
+
+#pragma pack(pop)
 
 /* end of file ****************************************************************************************************** */

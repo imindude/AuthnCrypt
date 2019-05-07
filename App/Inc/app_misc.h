@@ -12,24 +12,11 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /* ****************************************************************************************************************** */
 
-enum AppStatus
-{
-    _AppStatus_Idle_,
-    _AppStatus_Error_,
-    _AppStatus_Busy_,
-    _AppStatus_ManualLed_
-};
-typedef enum AppStatus  AppStatus;
-
-/* ****************************************************************************************************************** */
-
-void        status_init(void);
-void        status_reset(void);
-bool        status_postman(AppStatus status);
-AppStatus   status_get(void);
-bool        status_manual_led(bool on);
+void    make_ctap1_tag(uint8_t *param, int16_t param_len, uint8_t *key, int16_t key_len, uint8_t *tag);
+void    make_ctap2_tag(uint8_t *param, int16_t param_len, uint8_t *seed, int16_t seed_len, uint32_t count, uint8_t *tag);
 
 /* end of file ****************************************************************************************************** */

@@ -120,20 +120,15 @@ uint32_t device_get_counter(void)
     return _counter++;
 }
 
+bool device_need_pin(void)
+{
+    return true;    // for test
+}
+
 int device_mbedtls_rng(void *dummy, unsigned char *output, size_t len)
 {
     (void)dummy;
     rng_bytes(output, len);
-    return 0;
-}
-
-/* ****************************************************************************************************************** */
-
-int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t *olen)
-{
-    rng_bytes(output, len);
-    *olen = len;
-
     return 0;
 }
 

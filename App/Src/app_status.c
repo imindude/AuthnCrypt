@@ -40,7 +40,6 @@ static StatusData   _status_data;
 static bool wakeup_func(uint32_t now_ms, uint32_t wakeup_ms, uint32_t worker_ms, void *param)
 {
     return ((worker_ms + 10) <= now_ms) ? true : false;
-//    return (now_ms != worker_ms) ? true : false;
 }
 
 static void worker_func(uint32_t now_ms, uint32_t worker_ms, void *param)
@@ -139,7 +138,7 @@ static void worker_func(uint32_t now_ms, uint32_t worker_ms, void *param)
     }
 
     led_blue(this->dimming_);
-//    led_red(this->blinky_on_);
+    led_red(this->blinky_on_);
 }
 
 void status_init(void)

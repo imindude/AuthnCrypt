@@ -12,24 +12,12 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 /* ****************************************************************************************************************** */
 
-enum AppStatus
-{
-    _AppStatus_Idle_,
-    _AppStatus_Error_,
-    _AppStatus_Busy_,
-    _AppStatus_ManualLed_
-};
-typedef enum AppStatus  AppStatus;
-
-/* ****************************************************************************************************************** */
-
-void        status_init(void);
-void        status_reset(void);
-bool        status_postman(AppStatus status);
-AppStatus   status_get(void);
-bool        status_manual_led(bool on);
+void    fido2_init(void);
+void    fido2_reset(void);
+void    fido2_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms);
 
 /* end of file ****************************************************************************************************** */
