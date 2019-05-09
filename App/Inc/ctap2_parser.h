@@ -11,7 +11,6 @@
 /* ****************************************************************************************************************** */
 
 #include <stddef.h>
-#include "cbor.h"
 #include "fidodef.h"
 
 /* ****************************************************************************************************************** */
@@ -27,6 +26,7 @@
 #define MakeCredentialParam_pinProtocol             (1 << 8)    // optional
 #define MakeCredentialParam_Required                (MakeCredentialParam_clientDataHash | MakeCredentialParam_rp | \
                                                      MakeCredentialParam_user | MakeCredentialParam_pubKeyCredParams)
+
 #define GetAssertionParam_rpId                      (1 << 0)    // required
 #define GetAssertionParam_clientDataHash            (1 << 1)    // required
 #define GetAssertionParam_allowList                 (1 << 2)    // optional
@@ -36,14 +36,18 @@
 #define GetAssertionParam_pinProtocol               (1 << 6)    // optional
 #define GetAssertionParam_Required                  (GetAssertionParam_rpId | GetAssertionParam_clientDataHash)
 
-/* ****************************************************************************************************************** */
+#define ClientPinParam_pinProtocol                  (1 << 0)    // required
+#define ClientPinParam_subCommand                   (1 << 1)    // required
+#define ClientPinParam_keyAgreement                 (1 << 2)    // optional
+#define ClientPinParam_pinAuth                      (1 << 3)    // optional
+#define ClientPinParam_newPinEnc                    (1 << 4)    // optional
+#define ClientPinParam_pinHashEnc                   (1 << 5)    // optional
+#define ClientPinParam_Required                     (ClientPinParam_pinProtocol | ClientPinParam_subCommand)
 
-struct CborCredentialList
-{
-    CborValue   value_;
-    size_t      count_;
-};
-typedef struct CborCredentialList   CborCredentialList;
+#define CREDENTIAL_TYPE_unknown             0
+#define CREDENTIAL_TYPE_publicKey           1
+
+/* ****************************************************************************************************************** */
 
 /* ****************************************************************************************************************** */
 

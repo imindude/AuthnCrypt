@@ -6,14 +6,21 @@
  * *********************************************************************************************************************
  */
 
+#include <string.h>
 #include "stm32f4xx.h"
 #include "app_device.h"
 #include "app_def.h"
 #include "hwl_rng.h"
+#include "mbedtls/ecdh.h"
+
+/* ****************************************************************************************************************** */
+
+#define DEVICE_UID_POSTFIX      0x84E9B5C8
 
 /* ****************************************************************************************************************** */
 
 static DeviceInfo   _device_info;
+static DeviceAuth   _device_auth;
 static uint32_t     _counter;
 
 /* ****************************************************************************************************************** */
@@ -74,17 +81,54 @@ void device_init(void)
 {
     uint32_t    *uid_base = (uint32_t*)UID_BASE;
 
-//    rng_bytes(_device_info.uid_.bytes_, DEVICE_UID_SIZE);
+    /**
+     * generate DeviceInfo
+     */
 
     _device_info.uid_.words_[0] = uid_base[0];
     _device_info.uid_.words_[1] = uid_base[1];
     _device_info.uid_.words_[2] = uid_base[2];
+    _device_info.uid_.words_[3] = DEVICE_UID_POSTFIX;
 
     _device_info.ver_.major_ = VERSION_MAJOR;
     _device_info.ver_.minor_ = VERSION_MINOR;
     _device_info.ver_.build_ = BUILD_NUMBER;
 
     _device_info.pin_confirmed_ = false;
+
+    /**
+     * generate DeviceAuth
+     */
+
+    uint8_t     buffer[1 + sizeof(_device_auth.key_agreement_pub_) + sizeof(_device_auth.key_agreement_pri_)];
+    size_t      size;
+    mbedtls_ecdh_context    ecdh_ctx;
+
+    memset(buffer, 0, sizeof(buffer));
+
+    mbedtls_ecdh_init(&ecdh_ctx);
+    mbedtls_ecdh_setup(&ecdh_ctx, MBEDTLS_ECP_DP_SECP256R1);
+
+    do
+    {
+        mbedtls_ecp_gen_keypair(&ecdh_ctx.grp, &ecdh_ctx.d, &ecdh_ctx.Q, device_mbedtls_rng, NULL);
+    }
+    while ((mbedtls_ecp_check_privkey(&ecdh_ctx.grp, &ecdh_ctx.d) != 0) ||
+            (mbedtls_ecp_check_pubkey(&ecdh_ctx.grp, &ecdh_ctx.Q) != 0));
+
+    // CAUTION!! filled from end of the buffer
+    mbedtls_mpi_write_binary(&ecdh_ctx.d, buffer, sizeof(buffer));
+    // CAUTION!! filled from start of the buffer
+    mbedtls_ecp_point_write_binary(&ecdh_ctx.grp, &ecdh_ctx.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &size, buffer, sizeof(buffer));
+
+    mbedtls_ecdh_free(&ecdh_ctx);
+
+    // CAUTION!! filled from end of the buffer
+    memcpy(_device_auth.key_agreement_pri_, buffer + 65, sizeof(_device_auth.key_agreement_pri_));
+    // CAUTION!! filled from start of the buffer (skip POINT_FORMAT)
+    memcpy(_device_auth.key_agreement_pub_, buffer + 1, sizeof(_device_auth.key_agreement_pub_));
+
+    rng_bytes(_device_auth.pin_token_, sizeof(_device_auth.pin_token_));
 
     /**
      * I think, authentication counter is not need to store the NVM.
@@ -97,6 +141,11 @@ void device_init(void)
 DeviceInfo* device_get_info(void)
 {
     return &_device_info;
+}
+
+DeviceAuth* device_get_auth(void)
+{
+    return &_device_auth;
 }
 
 uint8_t* device_get_fido_key(uint16_t *size)
@@ -123,6 +172,11 @@ uint32_t device_get_counter(void)
 bool device_need_pin(void)
 {
     return true;    // for test
+}
+
+void device_get_rng(uint8_t *bytes, uint32_t len)
+{
+    rng_bytes(bytes, len);
 }
 
 int device_mbedtls_rng(void *dummy, unsigned char *output, size_t len)

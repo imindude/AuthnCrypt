@@ -8,7 +8,6 @@
 
 #include <string.h>
 #include "app_ctap2.h"
-#include "fidodef.h"
 #include "app_def.h"
 #include "app_device.h"
 #include "app_hidif.h"
@@ -31,12 +30,6 @@
 #define CTAP2_NONCE_SIZE                32
 #define CTAP2_CREDENTIAL_TAG_SIZE       32
 
-struct PinToken
-{
-    uint8_t token_[16];
-};
-typedef struct PinToken     PinToken;
-
 struct Ctap2Data
 {
     enum
@@ -52,9 +45,10 @@ struct Ctap2Data
 
     union
     {
-        MakeCredential  make_cred_;
+        MakeCredential  make_credential_;
+        GetAssertion    get_assertion_;
+        ClientPin       client_pin_;
     };
-    PinToken            pin_token_;
 };
 typedef struct Ctap2Data    Ctap2Data;
 
@@ -85,48 +79,28 @@ static bool process_timeout(Ctap2Data *this, uint32_t now_ms)
     return false;
 }
 
-static uint8_t verify_pin_auth(PinToken *pin_token, PinAuthEntity *pin_auth, ClientDataHashEntity *client_data_hash)
+static bool authenticate_credential(RelyingPartyId *rp_id, PubKeyCredDesc *desc)
 {
-    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    mbedtls_md_context_t    md_ctx;
-    uint8_t     md_hash[mbedtls_md_get_size(md_info)];
-
-    mbedtls_md_init(&md_ctx);
-    mbedtls_md_setup(&md_ctx, md_info, 1);
-    mbedtls_md_hmac_starts(&md_ctx, pin_token->token_, sizeof(pin_token->token_));
-    mbedtls_md_hmac_update(&md_ctx, client_data_hash->hash_, sizeof(client_data_hash->hash_));
-    mbedtls_md_hmac_finish(&md_ctx, md_hash);
-    mbedtls_md_free(&md_ctx);
-
-    return (memcmp(pin_auth->pin_, md_hash, sizeof(pin_auth->pin_)) == 0) ?
-            FIDO_ERR_SUCCESS : FIDO_ERR_PIN_AUTH_INVALID;
-}
-
-static bool authenticate_credential(RelyingPartyEntity *rp, CredentialDesc *desc)
-{
-    CredentialId    *cred_id = &desc->credential_.id_;
-
-    if (desc->type_ == CREDENTIAL_TYPE_Public_Key)
+    if (desc->type_ == CREDENTIAL_TYPE_publicKey)
     {
-        uint8_t     tag[CTAP2_CREDENTIAL_TAG_SIZE];
+        const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+        uint8_t     hash[mbedtls_md_get_size(md_info)];
+        uint8_t     tag[32];
 
-        make_ctap2_tag(cred_id->rpid_hash_, sizeof(cred_id->rpid_hash_), cred_id->nonce_, sizeof(cred_id->nonce_),
-                cred_id->count_, tag);
-        if (memcmp(cred_id->tag_, tag, CTAP2_CREDENTIAL_TAG_SIZE) == 0)
-            return true;
-    }
-    else if (desc->type_ == CREDENTIAL_TYPE_CTAP1)
-    {
-        uint8_t     appl_param[CTAP1_APPL_PARAM_SIZE];
-        uint8_t     tag[CTAP1_TAG_SIZE];
+        mbedtls_md_hmac(md_info, device_get_info()->uid_.bytes_, sizeof(device_get_info()->uid_.bytes_),
+                rp_id->id_, sizeof(rp_id->id_), hash);
+        make_fido_tag(hash, sizeof(hash), desc->id_.nonce_, sizeof(desc->id_.nonce_), tag);
 
-        mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), rp->id_, sizeof(rp->id_), appl_param);
-        make_ctap1_tag(appl_param, sizeof(appl_param), (uint8_t*)cred_id, CTAP1_KEY_SIZE, tag);
-        if (memcmp(cred_id->tag_, tag, CTAP2_CREDENTIAL_TAG_SIZE) == 0)
+        if (memcmp(desc->id_.tag_, tag, sizeof(desc->id_.tag_)) == 0)
             return true;
     }
 
     return false;
+}
+
+static bool check_cose_algorithm(int32_t alg)
+{
+    return (alg == COSE_Alg_ES256) ? true : false;
 }
 
 static uint8_t make_extensions(ExtensionsEntity *extensions, uint8_t *buffer, size_t *size)
@@ -168,138 +142,112 @@ static uint8_t make_extensions(ExtensionsEntity *extensions, uint8_t *buffer, si
 
 static void try_make_credential(Ctap2Data *this, uint8_t *dat, uint16_t len)
 {
-    memset(&this->make_cred_, 0, sizeof(MakeCredential));
-    memset(&this->cred_list_, 0, sizeof(CborCredentialList));
+    memset(&this->make_credential_, 0, sizeof(this->make_credential_));
 
-    MakeCredential      *make_cred = &this->make_cred_;
-    uint8_t     result = ctap2_parser_make_credential(dat, len, make_cred);
+    uint8_t     result = ctap2_parser_make_credential(dat, len, &this->make_credential_);
 
-    if (result != FIDO_ERR_SUCCESS)
+    if (result == FIDO_ERR_SUCCESS)
     {
-        // error
-        // result
-        return;
-    }
-
-    /* procedure 1. excludeList */
-
-    if (cred_list->count_ > 0)
-    {
-        CredentialDesc      cred_desc;
-
-        for (uint32_t i = 0; i < cred_list->count_; i++)
+        if ((this->make_credential_.params_ | MakeCredentialParam_Required) == MakeCredentialParam_Required)
         {
-            result = ctap2_parser_credential_descriptor(&cred_list->value_, &cred_desc);
-            if (result != FIDO_ERR_SUCCESS)
-            {
-                // error
-                // result;
-                return;
-            }
-            if (authenticate_credential(&make_cred->relying_party_, &cred_desc) == false)
-            {
-                // error
-                // FIDO_ERR_CREDENTIAL_EXCLUDED;
-                return;
-            }
-
-            if (cbor_value_advance(&cred_list->value_) != CborNoError)
-            {
-                // error
-                // FIDO_ERR_INVALID_CBOR;
-                return;
-            }
-        }
-    }
-
-    /* procedure 2. pubKeyCredparams */
-
-    if ((make_cred->pubkey_cred_param_.type_ != CREDENTIAL_TYPE_Public_Key) ||
-            (make_cred->pubkey_cred_param_.type_ != CREDENTIAL_TYPE_CTAP1))
-    {
-        // error
-        // FIDO_ERR_UNSUPPORTED_ALGORITHM;
-        return;
-    }
-
-    /* procedure 3. options */
-
-    if (make_cred->params_ | MakeCredentialParam_options)
-    {
-        OptionsEntity   *options = &make_cred->options_;
-
-        if (options->rk_)
-        {
-            // resident key
-            // store key material on the device
-        }
-
-        if (options->up_)
-        {
-            // user presence
-            // maybe not
-        }
-
-        if (options->uv_)
-        {
-            // user verification
-        }
-    }
-
-    /* procedure 4. extensions */
-
-    if (make_cred->params_ | MakeCredentialParam_extensions)
-    {
-        ExtensionsEntity    *extensions = &make_cred->extensions_;
-    }
-
-
-
-    if ((make_cred->params_ | MakeCredentialParam_Required) != MakeCredentialParam_Required)
-    {
-        // error
-        // FIDO_ERR_MISSING_PARAMETER;
-        break;
-    }
-    if (device_need_pin())
-    {
-        if (make_cred->pin_auth_.presence_ == false)
-        {
-            // error
-            // FIDO_ERR_PIN_REQUIRED;
-            break;
+            this->status_ = _MakeCredential_UserPresent_;
+            // good to work
+            return ;
         }
         else
         {
-            result = verify_pin_auth(&this->pin_token_, &make_cred->pin_auth_, &make_cred->client_data_hash_);
-            if (result != FIDO_ERR_SUCCESS)
-            {
-                // error
-                // result;
-                break;
-            }
+            result = FIDO_ERR_INVALID_PARAMETER;
         }
     }
 
-    if (make_cred->params_ | MakeCredentialParam_pinAuth)
-    {
-        uint8_t     pin_command[5] = { PIN_CLASS, PIN_INS_CHECK, 0, 0, 0 };
-
-        pin_postman(this->cid_, pin_command, 5, now_ms);
-
-        this->status_       = _MakeCredential_UserPresent_;
-        this->keepalive_ms_ = now_ms + CTAP2_KEEPALIVE_INTERVAL_MS;
-        this->timeout_ms_   = now_ms + CTAP2_TIMEOUT_MS;
-
-        break;
-    }
-
-    lease_make_credential(this);
+    // error something
+    // result
 }
 
 static void lease_make_credential(Ctap2Data *this)
 {
+    MakeCredential  *mc = &this->make_credential_;
+    uint8_t     result = FIDO_ERR_SUCCESS;
 
+    do
+    {
+        /* step 1. excludeList */
+
+        if (mc->params_ | MakeCredentialParam_excludeList)
+        {
+            for (int8_t i = 0; i < mc->exclude_list_.count_; i++)
+            {
+                if (authenticate_credential(&mc->relying_party_.id_, &mc->exclude_list_.descs_[i]))
+                {
+                    result = FIDO_ERR_CREDENTIAL_EXCLUDED;
+                    break;
+                }
+            }
+
+            if (result != FIDO_ERR_SUCCESS)
+                break;
+        }
+
+        /* step 2. pubKeyCredParams */
+
+        if (mc->params_ | MakeCredential_pubKeyCredParams)
+        {
+            result = FIDO_ERR_UNSUPPORTED_ALGORITHM;
+
+            for (int8_t i = 0; i < mc->pubkey_cred_param_.count_; i++)
+            {
+                if (check_cose_algorithm(mc->pubkey_cred_param_.params_[i].alg_))
+                {
+                    result = FIDO_ERR_SUCCESS;
+                    break;
+                }
+            }
+
+            if (result != FIDO_ERR_SUCCESS)
+                break;
+        }
+
+        /* step 3. oiptions */
+
+        if (mc->params_ | MakeCredentialParam_options)
+        {
+            if (mc->options_.up_)
+            {
+                result = FIDO_ERR_INVALID_OPTION;
+                break;
+            }
+
+            if (mc->options_.rk_)
+            {
+                // store resident key
+            }
+
+            if (mc->options_.uv_)
+            {
+                // always true
+                // ????
+            }
+        }
+    }
+    while (0);
+
+    // do something
+}
+
+static void try_get_assertion(Ctap2Data *this, uint8_t *dat, uint16_t len)
+{
+    memset(&this->get_assertion_, 0, sizeof(this->get_assertion_));
+    memset(&this->credential_list_, 0, sizeof(this->credential_list_));
+}
+
+static void try_get_info(Ctap2Data *this, uint8_t *dat, uint16_t len)
+{
+    memset(&this->get_info_, 0, sizeof(this->get_info_));
+}
+
+static void try_client_pin(Ctap2Data *this, uint8_t *dat, uint16_t len)
+{
+    memset(&this->client_pin_, 0, sizeof(this->client_pin_));
 }
 
 static bool wakeup_func(uint32_t now_ms, uint32_t wakeup_ms, uint32_t worker_ms, void *param)
@@ -332,11 +280,13 @@ void ctap2_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
         try_make_credential(&_ctap2_data, dat + 1, len - 1, now_ms);
         break;
     case authenticatorGetAssertion:
-        get_assertion(dat + 1, len - 1, now_ms);
+        try_get_assertion(&_ctap2_data, dat + 1, len - 1, now_ms);
         break;
     case authenticatorGetInfo:
+        try_get_info(&_ctap2_data, dat + 1, len - 1, now_ms);
         break;
     case authenticatorClientPIN:
+        try_client_pin(&_ctap2_data, dat + 1, len - 1, now_ms);
         break;
     case authenticatorReset:
         break;

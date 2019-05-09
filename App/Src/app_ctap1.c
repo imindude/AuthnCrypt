@@ -54,7 +54,7 @@ union Ctap1Key
     };
     uint8_t     handle_[CTAP1_KEY_HANDLE_SIZE];
 };
-typedef struct Ctap1Key         Ctap1Key;
+typedef union Ctap1Key          Ctap1Key;
 
 struct Ctap1Data
 {
@@ -116,7 +116,7 @@ static void make_keypair(uint8_t *appl_param, Ctap1Key *hkey, uint8_t *priv_key,
 
     mbedtls_md_init(&md_ctx);
     mbedtls_md_setup(&md_ctx, md_info, 1);      // HMAC ready
-    mbedtls_md_hmac_starts(&md_ctx, device_get_info()->uid_.bytes_, DEVICE_UID_SIZE);
+    mbedtls_md_hmac_starts(&md_ctx, device_get_info()->uid_.bytes_, sizeof(device_get_info()->uid_.bytes_));
     mbedtls_md_hmac_update(&md_ctx, hkey->handle_, CTAP1_KEY_HANDLE_SIZE);
     mbedtls_md_hmac_update(&md_ctx, appl_param, CTAP1_APPL_PARAM_SIZE);
     mbedtls_md_finish(&md_ctx, buffer.digest_);
@@ -149,14 +149,12 @@ static bool param_parser(uint8_t *dat, uint8_t *appl_param, uint8_t *chal_param,
     if (dat[0] > 0)
     {
         /* short encoding */
-
         pos = 1;
         len = dat[0];
     }
     else
     {
         /* extended length encoding (0|MSB|LSB) */
-
         pos = 3;
         len = dat[1] << 8 | dat[2];
     }
@@ -189,7 +187,7 @@ static void check_registration(Ctap1Data *this, uint8_t *dat, uint16_t len)
         Ctap1Key    cmp_key;
 
         memcpy(cmp_key.key_, this->key_handle_.key_, CTAP1_KEY_SIZE);
-        make_ctap1_tag(this->appl_param_, sizeof(this->appl_param_), cmp_key.key_, sizeof(cmp_key.key_), cmp_key.tag_);
+        make_fido_tag(this->appl_param_, sizeof(this->appl_param_), cmp_key.key_, sizeof(cmp_key.key_), cmp_key.tag_);
 
         if (memcmp(cmp_key.tag_, this->key_handle_.tag_, CTAP1_TAG_SIZE) == 0)
             sw = FIDO_SW_CONDITINOS_NOT_SATISFIED;
@@ -224,8 +222,8 @@ static void lease_registration(Ctap1Data *this)
 
     /* U2F key handle */
 
-    rng_bytes(this->key_handle_.key_, CTAP1_KEY_SIZE);
-    make_ctap1_tag(this->appl_param_, sizeof(this->appl_param_), this->key_handle_.key_, sizeof(this->key_handle_.key_),
+    device_get_rng(this->key_handle_.key_, CTAP1_KEY_SIZE);
+    make_fido_tag(this->appl_param_, sizeof(this->appl_param_), this->key_handle_.key_, sizeof(this->key_handle_.key_),
             this->key_handle_.tag_);
     make_keypair(this->appl_param_, &this->key_handle_, NULL, publ_key);
 
@@ -298,7 +296,7 @@ static void try_authenticate(Ctap1Data *this, uint8_t *dat, uint16_t len, uint32
         Ctap1Key    cmp_key;
 
         memcpy(cmp_key.key_, this->key_handle_.key_, CTAP1_KEY_SIZE);
-        make_ctap1_tag(this->appl_param_, sizeof(this->appl_param_), cmp_key.key_, sizeof(cmp_key.key_), cmp_key.tag_);
+        make_fido_tag(this->appl_param_, sizeof(this->appl_param_), cmp_key.key_, sizeof(cmp_key.key_), cmp_key.tag_);
 
         if (memcmp(cmp_key.tag_, this->key_handle_.tag_, CTAP1_TAG_SIZE) == 0)
         {

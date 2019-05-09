@@ -16,7 +16,7 @@
 
 /* ****************************************************************************************************************** */
 
-void    make_ctap1_tag(uint8_t *param, int16_t param_len, uint8_t *key, int16_t key_len, uint8_t *tag);
-void    make_ctap2_tag(uint8_t *param, int16_t param_len, uint8_t *seed, int16_t seed_len, uint32_t count, uint8_t *tag);
+void    make_fido_tag(uint8_t *param, int16_t param_len, uint8_t *nonce, int16_t nonce_len, uint8_t *tag);
+bool    check_array_empty(uint8_t *array, uint32_t len);
 
 /* end of file ****************************************************************************************************** */

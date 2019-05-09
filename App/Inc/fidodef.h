@@ -10,6 +10,11 @@
 
 /* ****************************************************************************************************************** */
 
+#include <stdint.h>
+#include <stdbool.h>
+
+/* ****************************************************************************************************************** */
+
 /**
  * capabilities
  */
@@ -143,12 +148,9 @@
 #define MakeCredential_pinAuth              0x08    // optional / Byte Array
 #define MakeCredential_pinProtocol          0x09    // optional / Unsigned Integer
 
-/**
- * authenticatorMakeCredential of Response
- */
-#define MakeCredential_authData             0x01    // required / Byte Array
-#define MakeCredential_fmt                  0x02    // required / String
-#define MakeCredential_attStmt              0x03    // required / Byte Array
+//#define MakeCredential_authData             0x01    // required / Byte Array
+//#define MakeCredential_fmt                  0x02    // required / String
+//#define MakeCredential_attStmt              0x03    // required / Byte Array
 
 /**
  * authenticatorGetAssertion parameters
@@ -162,37 +164,51 @@
 #define GetAssertion_pinAuth                0x06    // optional / Byte Array
 #define GetAssertion_pinProtocol            0x07    // optional / Unsigned Integer
 
-/**
- * authenticatorGetAssertion of Response
- */
-
-#define GetAssertion_credential             0x01    // optional / PublicKeyCredentialDescriptor
-#define GetAssertion_authData               0x02    // required / Byte Array
-#define GetAssertion_signature              0x03    // required / Byte Array
-#define GetAssertion_user                   0x04    // optional / PublicKeyCredentialUserEntity
-#define GetAssertion_numberOfCredentials    0x05    // optional / Integer
+//#define GetAssertion_credential             0x01    // optional / PublicKeyCredentialDescriptor
+//#define GetAssertion_authData               0x02    // required / Byte Array
+//#define GetAssertion_signature              0x03    // required / Byte Array
+//#define GetAssertion_user                   0x04    // optional / PublicKeyCredentialUserEntity
+//#define GetAssertion_numberOfCredentials    0x05    // optional / Integer
 
 /**
  * authenticatorGetInfo of Response
  */
 
-#define GetInfo_versions                    0x01    // required / Sequence of strings
-#define GetInfo_extensions                  0x02    // optional / Sequence of strings
-#define GetInfo_aaguid                      0x03    // required / Byte String
-#define GetInfo_options                     0x04    // optional / Map
-#define GetInfo_maxMsgSize                  0x05    // optional / Unsigned Integer
-#define GetInfo_pinProtocols                0x06    // optional / Array of Unsigned Integer
+//#define GetInfo_versions                    0x01    // required / Sequence of strings
+//#define GetInfo_extensions                  0x02    // optional / Sequence of strings
+//#define GetInfo_aaguid                      0x03    // required / Byte String
+//#define GetInfo_options                     0x04    // optional / Map
+//#define GetInfo_maxMsgSize                  0x05    // optional / Unsigned Integer
+//#define GetInfo_pinProtocols                0x06    // optional / Array of Unsigned Integer
+
+/**
+ * authenticatorClientPIN
+ */
+
+#define ClientPIN_pinProtocol               0x01    // required / Unsigned Integer
+#define ClientPIN_subCommand                0x02    // required / Unsigned Integer
+#define ClientPIN_keyAgreement              0x03    // optional / COSE_Key
+#define ClientPIN_pinAuth                   0x04    // Optional / Byte Array
+#define ClientPIN_newPinEnc                 0x05    // Optional / Byte Array
+#define ClientPIN_pinHashEnc                0x06    // Optional / Byte Array
+
+#define ClientPIN_Response_keyAgreement     0x01    // Optional / COSE_Key
+#define ClientPIN_Response_pinToken         0x02    // Optional / COSE_Key
+#define ClientPIN_Response_retries          0x03    // Optional / Unsigned Integer
+
+#define ClientPIN_subCommand_getRetries         0x01
+#define ClientPIN_subCommand_getKeyAgreement    0x02
+#define ClientPIN_subCommand_setPIN             0x03
+#define ClientPIN_subCommand_changePIN          0x04
+#define ClientPIN_subCommand_getPINToken        0x05
 
 /* ****************************************************************************************************************** */
 
 /**
  * PublicKeyCredentialType
  */
-#define CREDENTIAL_TYPE_PUBLIC_KEY_STRING   "public-key"
 
-#define CREDENTIAL_TYPE_Unknown         0
-#define CREDENTIAL_TYPE_Public_Key      1
-#define CREDENTIAL_TYPE_CTAP1           2
+#define CREDENTIAL_TYPE_PUBLIC_KEY_STR      "public-key"
 
 /**
  * COSE key label & value parameters (RFC-8152)
@@ -205,98 +221,145 @@
 #define COSE_Label_y            -3  // y-coordinate
 #define COSE_Label_d            -4  // private key
 
-#define COSE_Value_EC2          2   // elliptic curve keys w/ x- and y- coordinate
-#define COSE_Value_P256         1   // NIST P-256 also knows as secp256r1
-#define COSE_Value_ES256        -7  // ECDSA w/ SHA256
+// https://www.iana.org/assignments/cose/cose.xhtml#algorithms
+#define COSE_Alg_ES256          -7  // ECDSA w/ SHA256
 
 /**
  * Extensions
  */
 
-#define EXTENSIONS_HMAC_SECRET_KEY_AGREEMENT        0x01
-#define EXTENSIONS_HMAC_SECRET_SALT_ENC             0x02
-#define EXTENSIONS_HMAC_SECRET_SALT_AUTH            0x03
+#define EXTENSIONS_HmacSecret_keyAgreement          0x01
+#define EXTENSIONS_HmacSecret_saltEnc               0x02
+#define EXTENSIONS_HmacSecret_saltAuth              0x03
 
 /* ****************************************************************************************************************** */
 
 #pragma pack(push, 1)
 
+// https://www.iana.org/assignments/cose/cose.xhtml#algorithms
+struct PubKeyCredParam
+{
+    int8_t      type_;                  // PublicKeyCredentialType (currently only "public-key")
+    int32_t     alg_;                   // cryptographic algorithm
+};
+typedef struct PubKeyCredParam          PubKeyCredParam;
+
+// https://www.w3.org/TR/webauthn/#credential-id
+union CredentialId
+{
+    struct
+    {
+        uint8_t     tag_[16];
+        uint8_t     nonce_[64];
+    };
+    uint8_t         bytes_[1];
+};
+typedef union CredentialId              CredentialId;
+
+struct RelyingPartyId
+{
+    char            id_[256];           // DOMString
+};
+typedef struct RelyingPartyId           RelyingPartyId;
+
+// https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialdescriptor
+struct PubKeyCredDesc
+{
+    int8_t          type_;              // PublicKeyCredentialType (currently only "public-key")
+    CredentialId    id_;
+};
+typedef struct PubKeyCredDesc           PubKeyCredDesc;
+
 struct CoseKey
 {
-    int     kty_;       // COSE key type
-    int     alg_;       // COSE algorithm
-    int     crv_;       // EC identifier
-    uint8_t x_[32];     // x-coordinate
-    uint8_t y_[32];     // y-coordinate
-    uint8_t d_[32];     // private key
+    int         kty_;                   // COSE key type
+    int         alg_;                   // COSE algorithm
+    int         crv_;                   // EC identifier
+    uint8_t     x_[32];                 // x-coordinate
+    uint8_t     y_[32];                 // y-coordinate
+    uint8_t     d_[32];                 // private key
 };
 typedef struct CoseKey                  CoseKey;
 
-struct HmacSecretCreate
+struct SaltEnc
 {
-	uint8_t		nonce_[32];
+    uint8_t     salt_[64];
+    int8_t      size_;
 };
-typedef struct HmacSecretCreate         HmacSecretCreate;
+typedef struct SaltEnc                  SaltEnc;
 
-struct HmacSecretGet
+struct SaltAuth
 {
-	CoseKey		key_agreement_;
-	uint8_t		salt1_[32];
-	uint8_t		salt2_[32];
-	uint8_t		salt_auth_[16];
+    uint8_t     auth_[16];
 };
-typedef struct HmacSecretGet            HmacSecretGet;
+typedef struct SaltAuth                 SaltAuth;
 
+struct HmacSecret
+{
+    CoseKey     key_agreement_;
+    SaltEnc     salt_enc_;
+    SaltAuth    salt_auth_;
+};
+typedef struct HmacSecret               HmacSecret;
+
+// https://fidoalliance.org/specs/fido-v2.0-ps-20190130/fido-client-to-authenticator-protocol-v2.0-ps-20190130.html#authenticatorMakeCredential
 struct ClientDataHashEntity
 {
-    uint8_t     hash_[32];
+    uint8_t     hash_[32];              // Byte Array
 };
 typedef struct ClientDataHashEntity     ClientDataHashEntity;
 
+// https://www.w3.org/TR/webauthn/#sctn-rp-credential-params
 struct RelyingPartyEntity
 {
-    char        id_[128];
-    char		name_[256];
-    char		icon_url_[256];
+    RelyingPartyId  id_;
 };
 typedef struct RelyingPartyEntity       RelyingPartyEntity;
 
+// https://www.w3.org/TR/webauthn/#sctn-user-credential-params
 struct UserEntity
 {
-    char        id_[128];
-    char        disp_name_[256];
-    char		user_name_[256];
-    char		icon_url_[256];
+    uint8_t     id_[128];               // BufferSource
+    char        disp_name_[256];        // DOMString
 };
 typedef struct UserEntity               UserEntity;
 
+// https://www.w3.org/TR/webauthn/#dictdef-publickeycredentialparameters
 struct PubKeyCredParamsEntity
 {
-    uint8_t     type_;      // should "public-key"
-    int32_t     cose_;      // should "-7"
+    PubKeyCredParam     params_[10];
+    int8_t              count_;
 };
 typedef struct PubKeyCredParamsEntity   PubKeyCredParamsEntity;
 
-union ExtensionsEntity
+struct PubKeyCredDescEntity
 {
-    HmacSecretCreate    create_;
-    HmacSecretGet       get_;
+    PubKeyCredDesc      descs_[10];
+    int8_t              count_;
+};
+typedef struct PubKeyCredDescEntity     PubKeyCredDescEntity;
+
+struct ExtensionsEntity
+{
+    union
+    {
+        bool        create_;
+        HmacSecret  secret_;
+    };
 };
 typedef struct ExtensionsEntity         ExtensionsEntity;
 
 struct OptionsEntity
 {
-    bool        rk_;
-    bool        up_;
-    bool        uv_;
+    bool        rk_;        // makeCredential
+    bool        up_;        // getAssertion
+    bool        uv_;        // makeCredential & getAssertion
 };
 typedef struct OptionsEntity            OptionsEntity;
 
 struct PinAuthEntity
 {
-    bool        presence_;
-    bool        zero_pin_;
-    uint8_t     pin_[16];
+    uint8_t     auth_[16];
 };
 typedef struct PinAuthEntity            PinAuthEntity;
 
@@ -306,13 +369,43 @@ struct PinProtocolEntity
 };
 typedef struct PinProtocolEntity        PinProtocolEntity;
 
+struct SubCommandEntity
+{
+    uint32_t    command_;
+};
+typedef struct SubCommandEntity     SubCommandEntity;
+
+struct KeyAgreementEntity
+{
+    CoseKey     key_;
+};
+typedef struct KeyAgreementEntity   KeyAgreementEntity;
+
+struct NewPinEncEntity
+{
+    uint8_t     enc_[256];
+};
+typedef struct NewPinEncEntity      NewPinEncEntity;
+
+struct PinHashEncEntity
+{
+    uint8_t     enc_[16];
+};
+typedef struct PinHashEncEntity     PinHashEncEntity;
+
+struct RpIdEntity
+{
+    RelyingPartyId  id_;
+};
+typedef struct RpIdEntity           RpIdEntity;
+
 struct MakeCredential
 {
     ClientDataHashEntity        client_data_hash_;
     RelyingPartyEntity          relying_party_;
     UserEntity                  user_;
     PubKeyCredParamsEntity      pubkey_cred_param_;
-    /* "exclude list" something */
+    PubKeyCredDescEntity        exclude_list_;
     ExtensionsEntity            extensions_;
     OptionsEntity               options_;
     PinAuthEntity               pin_auth_;
@@ -322,28 +415,32 @@ struct MakeCredential
 };
 typedef struct MakeCredential       MakeCredential;
 
-struct CredentialId
+struct GetAssertion
 {
-    uint8_t     tag_[32];
-    uint8_t     nonce_[32];
-    uint8_t     rpid_hash_[32];
-    uint8_t     count_;
-};
-typedef struct CredentialId         CredentialId;
+    RpIdEntity                  rp_id_;
+    ClientDataHashEntity        client_data_hash_;
+    PubKeyCredDescEntity        allow_list_;
+    ExtensionsEntity            extensions_;
+    OptionsEntity               options_;
+    PinAuthEntity               pin_auth_;
+    PinProtocolEntity           pin_protocol_;
 
-struct CredentialEntity
-{
-    CredentialId    id_;
-    UserEntity      user_;
+    uint16_t    params_;
 };
-typedef struct CredentialEntity     CredentialEntity;
+typedef struct GetAssertion         GetAssertion;
 
-struct CredentialDesc
+struct ClientPin
 {
-    uint8_t             type_;
-    CredentialEntity    credential_;
+    PinProtocolEntity       pin_protocol_;          // shall be 1
+    SubCommandEntity        sub_command_;
+    KeyAgreementEntity      key_agreement_;
+    PinAuthEntity           pin_auth_;
+    NewPinEncEntity         new_pin_enc_;
+    PinHashEncEntity        pin_hash_enc_;
+
+    uint16_t    params_;
 };
-typedef struct CredentialDesc       CredentialDesc;
+typedef struct ClientPin            ClientPin;
 
 #pragma pack(pop)
 
