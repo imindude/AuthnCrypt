@@ -45,19 +45,37 @@ struct DeviceAuth
 
     // pinToken
     uint8_t     pin_token_[32];
+    // clientPin
+    bool        client_pin_;
+
+    // user verification
+    bool        uv_;
 };
 typedef struct DeviceAuth   DeviceAuth;
+
+union DataBlob
+{
+    struct
+    {
+        uint8_t usage_;
+        uint8_t data_[1];
+    }
+    blob_;
+    uint8_t     bytes_[512];
+};
+typedef union DataBlob      DataBlob;
 
 /* ****************************************************************************************************************** */
 
 void        device_init(void);
+void        device_get_rng(uint8_t *bytes, uint32_t len);
 DeviceInfo* device_get_info(void);
 DeviceAuth* device_get_auth(void);
 uint8_t*    device_get_fido_key(uint16_t *size);
 uint8_t*    device_get_fido_cert(uint16_t *size);
 uint32_t    device_get_counter(void);
-bool        device_need_pin(void);
-void        device_get_rng(uint8_t *bytes, uint32_t len);
+bool        device_save_blob(DataBlob *blob);
+bool        device_load_blob(int16_t index, DataBlob *blob);
 int         device_mbedtls_rng(void *handle, unsigned char *output, size_t len);
 
 /* end of file ****************************************************************************************************** */

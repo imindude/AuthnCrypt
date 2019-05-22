@@ -21,9 +21,10 @@
 /* ****************************************************************************************************************** */
 
 #define PIN_CLASS                   0x54
-#define PIN_INS_CHECK               0x10
-#define PIN_INS_GET                 0x11
-#define PIN_INS_SET                 0x12
+#define PIN_INS_TOUCH               0x10
+#define PIN_INS_CHECK               0x21
+#define PIN_INS_GET                 0x21
+#define PIN_INS_SET                 0x22
 
 #define PIN_SW_NO_ERROR             0x9000
 #define PIN_SW_VERIFY_FAILED        0x9004

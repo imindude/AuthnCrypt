@@ -26,10 +26,9 @@
 #define CTAP1_KEEPALIVE_INTERVAL_MS     100
 #define CTAP1_TIMEOUT_MS                20000
 
-#define CTAP1_PUBL_KEY_SIZE         65      // format(1) + X(32) + Y(32)
-#define CTAP1_PRIV_KEY_SIZE         32
+#define CTAP1_PUBL_KEY_SIZE         (1 + SECP256R1_PUBLIC_KEY_SIZE)     // format(1) + X(32) + Y(32)
+#define CTAP1_PRIV_KEY_SIZE         SECP256R1_PRIVATE_KEY_SIZE
 #define CTAP1_HASH_SIZE             32      // SHA256
-#define CTAP1_SIGNDER_MAX_SIZE      80
 
 #pragma pack(push, 1)
 
@@ -251,27 +250,8 @@ static void lease_registration(Ctap1Data *this)
 
     /* Attestation */
 
-    mbedtls_pk_context  pk_ctx;
-    uint8_t     sign[CTAP1_SIGNDER_MAX_SIZE];
-    size_t      len;
-    uint16_t    fido_key_size;
-    uint8_t     *fido_key = device_get_fido_key(&fido_key_size);
-
-#if 1   // fido key as PEM
-    mbedtls_pk_init(&pk_ctx);
-    mbedtls_pk_parse_key(&pk_ctx, fido_key, fido_key_size, NULL, 0);
-    mbedtls_pk_sign(&pk_ctx, MBEDTLS_MD_SHA256, buffer, mbedtls_md_get_size(md_info), sign, &len, device_mbedtls_rng, NULL);
-    mbedtls_pk_free(&pk_ctx);
-#else   // fido_key as binary
-    mbedtls_ecdsa_context   ecdsa_ctx;
-
-    mbedtls_ecdsa_init(&ecdsa_ctx);
-    mbedtls_ecp_group_load(&ecdsa_ctx.grp, MBEDTLS_ECP_DP_SECP256R1);
-    mbedtls_mpi_read_binary(&ecdsa_ctx.d, fido_key, fido_key_size);
-    mbedtls_ecdsa_write_signature(&ecdsa_ctx, MBEDTLS_MD_SHA256, buffer, mbedtls_md_get_size(md_info), sign, &len,
-            device_mbedtls_rng, NULL);
-    mbedtls_ecdsa_free(&ecdsa_ctx);
-#endif
+    uint8_t     sign[FIDO_SIGNDER_MAX_SIZE];
+    uint8_t     sign_len = make_attestation_sign(buffer, sizeof(buffer), sign);
 
     /* response */
 
@@ -283,7 +263,7 @@ static void lease_registration(Ctap1Data *this)
     hidif_add_byte(sizeof(Ctap1Key));
     hidif_add_bytes(this->key_handle_.handle_, CTAP1_KEY_HANDLE_SIZE);
     hidif_add_bytes(fido_cert, fido_cert_size);
-    hidif_add_bytes(sign, len);
+    hidif_add_bytes(sign, sign_len);
 
     hidif_append_sw(FIDO_SW_NO_ERROR);
     process_term(this);
@@ -358,7 +338,7 @@ static void lease_authenticate(Ctap1Data *this)
     /* sign */
 
     mbedtls_ecdsa_context   ecdsa_ctx;
-    uint8_t     sign[CTAP1_SIGNDER_MAX_SIZE];
+    uint8_t     sign[FIDO_SIGNDER_MAX_SIZE];
     size_t      len;
 
     mbedtls_ecdsa_init(&ecdsa_ctx);

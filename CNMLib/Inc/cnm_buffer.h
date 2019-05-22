@@ -17,8 +17,28 @@ extern "C" {
 #include <stddef.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 /* ****************************************************************************************************************** */
+
+struct BufferHandle
+{
+    uint8_t     *buffer_;
+    uint16_t    max_size_;
+    uint16_t    used_size_;
+};
+typedef struct BufferHandle     BufferHandle;
+
+static inline void buif_add_byte_unsafe(BufferHandle *bh, uint8_t byte)
+{
+    bh->buffer_[bh->used_size_++] = byte;
+}
+
+static inline void buif_add_bytes_unsafe(BufferHandle *bh, uint8_t *bs, uint16_t bs_len)
+{
+    memcpy(bh->buffer_ + bh->used_size_, bs, bs_len);
+    bh->used_size_ += bs_len;
+}
 
 struct BlockFifo
 {
@@ -49,6 +69,7 @@ typedef struct ByteArray    ByteArray;
 DEFINE_BLOCKFIFO(usbhid);
 
 DEFINE_BYTEARRAY(hidif);
+//DEFINE_BYTEARRAY(authn);
 
 /* ****************************************************************************************************************** */
 

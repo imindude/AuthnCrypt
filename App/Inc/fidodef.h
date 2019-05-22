@@ -148,9 +148,9 @@
 #define MakeCredential_pinAuth              0x08    // optional / Byte Array
 #define MakeCredential_pinProtocol          0x09    // optional / Unsigned Integer
 
-//#define MakeCredential_authData             0x01    // required / Byte Array
-//#define MakeCredential_fmt                  0x02    // required / String
-//#define MakeCredential_attStmt              0x03    // required / Byte Array
+#define MakeCredentialResp_authData         0x01    // required / Byte Array
+#define MakeCredentialResp_fmt              0x02    // required / String
+#define MakeCredentialResp_attStmt          0x03    // required / Byte Array
 
 /**
  * authenticatorGetAssertion parameters
@@ -202,6 +202,12 @@
 #define ClientPIN_subCommand_changePIN          0x04
 #define ClientPIN_subCommand_getPINToken        0x05
 
+/**
+ * FIDO2
+ */
+
+#define FIDO2_PIN_PROTOCOL_VER              1
+
 /* ****************************************************************************************************************** */
 
 /**
@@ -209,6 +215,14 @@
  */
 
 #define CREDENTIAL_TYPE_PUBLIC_KEY_STR      "public-key"
+
+/**
+ * COSE key type (RFC-8152)
+ */
+
+#define COSE_Key_OKP            1
+#define COSE_Key_EC2            2
+#define COSE_Key_Symmetric      4
 
 /**
  * COSE key label & value parameters (RFC-8152)
@@ -221,12 +235,31 @@
 #define COSE_Label_y            -3  // y-coordinate
 #define COSE_Label_d            -4  // private key
 
+// https://datatracker.ietf.org/doc/rfc8152/?include_text=1
+#define COSE_Crv_P256           1
+
 // https://www.iana.org/assignments/cose/cose.xhtml#algorithms
 #define COSE_Alg_ES256          -7  // ECDSA w/ SHA256
 
 /**
+ * attestation statement format identifier
+ */
+
+#define ATTESTATION_STATEMENT_FORMAT_IDENTIFIER     "packed"
+
+
+/**
+ * Credential type (custom)
+ */
+
+#define CREDENTIAL_TYPE_unknown             0
+#define CREDENTIAL_TYPE_publicKey           1
+
+/**
  * Extensions
  */
+
+#define EXTENSIONS_TYPE_HMAC_SECRET_STR             "hmac-secret"
 
 #define EXTENSIONS_HmacSecret_keyAgreement          0x01
 #define EXTENSIONS_HmacSecret_saltEnc               0x02
@@ -250,7 +283,15 @@ union CredentialId
     struct
     {
         uint8_t     tag_[16];
-        uint8_t     nonce_[64];
+        union
+        {
+            struct
+            {
+                uint8_t     nonce_[32];
+                uint32_t    count_;
+            };
+            uint8_t         seed_[32 + 4];
+        };
     };
     uint8_t         bytes_[1];
 };
@@ -283,7 +324,15 @@ typedef struct CoseKey                  CoseKey;
 
 struct SaltEnc
 {
-    uint8_t     salt_[64];
+    union
+    {
+        struct
+        {
+            uint8_t salt1_[32];
+            uint8_t salt2_[32];
+        };
+        uint8_t     salt_[64];
+    };
     int8_t      size_;
 };
 typedef struct SaltEnc                  SaltEnc;
@@ -341,11 +390,14 @@ typedef struct PubKeyCredDescEntity     PubKeyCredDescEntity;
 
 struct ExtensionsEntity
 {
-    union
+    enum
     {
-        bool        create_;
-        HmacSecret  secret_;
-    };
+        _Extensions_None,
+        _HmacSecret_Create,
+        _HmacSecret_Get
+    }
+    type_;
+    HmacSecret  secret_;
 };
 typedef struct ExtensionsEntity         ExtensionsEntity;
 

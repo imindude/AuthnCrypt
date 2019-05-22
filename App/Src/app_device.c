@@ -138,6 +138,11 @@ void device_init(void)
     _counter &= 0xFFFF;
 }
 
+void device_get_rng(uint8_t *bytes, uint32_t len)
+{
+    rng_bytes(bytes, len);
+}
+
 DeviceInfo* device_get_info(void)
 {
     return &_device_info;
@@ -169,15 +174,19 @@ uint32_t device_get_counter(void)
     return _counter++;
 }
 
-bool device_need_pin(void)
+bool device_save_blob(DataBlob *blob)
 {
-    return true;    // for test
+    blob->blob_.usage_ = 0x10;
+
+    return true;
 }
 
-void device_get_rng(uint8_t *bytes, uint32_t len)
+bool device_load_blob(int16_t index, DataBlob *blob)
 {
-    rng_bytes(bytes, len);
+    return true;
 }
+
+/* ****************************************************************************************************************** */
 
 int device_mbedtls_rng(void *dummy, unsigned char *output, size_t len)
 {

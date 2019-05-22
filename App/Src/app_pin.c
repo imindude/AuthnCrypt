@@ -273,6 +273,10 @@ void pin_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms)
     {
         switch (request->ins_)
         {
+        case PIN_INS_TOUCH:
+
+            break;
+
         case PIN_INS_CHECK:
 
             load_pincode(_pin_data.expected_);

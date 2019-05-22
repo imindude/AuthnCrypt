@@ -44,12 +44,10 @@
 #define ClientPinParam_pinHashEnc                   (1 << 5)    // optional
 #define ClientPinParam_Required                     (ClientPinParam_pinProtocol | ClientPinParam_subCommand)
 
-#define CREDENTIAL_TYPE_unknown             0
-#define CREDENTIAL_TYPE_publicKey           1
-
 /* ****************************************************************************************************************** */
 
-/* ****************************************************************************************************************** */
-
+uint8_t ctap2_parser_make_credential(uint8_t *dat, uint16_t len, MakeCredential *make_credential);
+uint8_t ctap2_parser_get_assertion(uint8_t *dat, uint16_t len, GetAssertion *get_assertion);
+uint8_t ctap2_parser_client_pin(uint8_t *dat, uint16_t len, ClientPin *client_pin);
 
 /* end of file ****************************************************************************************************** */

@@ -221,6 +221,12 @@ static uint8_t hmac_secret_parser(CborValue *value, HmacSecret *secret)
                 result = bytestring_parser(&map, secret->salt_auth_.auth_, &size);
                 break;
             }
+
+            if (cbor_value_advance(&map) != CborNoError)
+            {
+                result = FIDO_ERR_INVALID_CBOR;
+                break;
+            }
         }
     }
     while (0);
@@ -334,22 +340,29 @@ static uint8_t get_extensions(CborValue *value, ExtensionsEntity *entity)
                 break;
             }
 
-            if (strncmp(key, "hmac-secret", 11) == 0)
+            if (strncmp(key, EXTENSIONS_TYPE_HMAC_SECRET_STR, strlen(EXTENSIONS_TYPE_HMAC_SECRET_STR)) == 0)
             {
                 CborType    type = cbor_value_get_type(&map);
 
                 if (type == CborBooleanType)
                 {
-                    if (cbor_value_get_boolean(&map, &entity->create_) != CborNoError)
+                    bool    create = false;
+
+                    if (cbor_value_get_boolean(&map, &create) != CborNoError)
                     {
                         result = FIDO_ERR_INVALID_CBOR;
                         break;
                     }
+                    entity->type_ = _HmacSecret_Create;
                 }
                 else if (type == CborMapType)
                 {
                     if ((result = hmac_secret_parser(&map, &entity->secret_)) != FIDO_ERR_SUCCESS)
+                    {
+                        result = FIDO_ERR_INVALID_CBOR;
                         break;
+                    }
+                    entity->type_ = _HmacSecret_Get;
                 }
             }
 
