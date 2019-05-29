@@ -234,7 +234,7 @@ static uint8_t hmac_secret_parser(CborValue *value, HmacSecret *secret)
     return result;
 }
 
-static uint8_t pubkey_credparam_parser(CborValue *value, PubKeyCredParam *entity)
+static uint8_t pubkey_credparam_parser(CborValue *value, CredentialParameters *cred_param)
 {
     CborValue   type_cbor;
     CborValue   alg_cbor;
@@ -263,13 +263,13 @@ static uint8_t pubkey_credparam_parser(CborValue *value, PubKeyCredParam *entity
     if (result != FIDO_ERR_SUCCESS)
         return result;
 
-    entity->type_ = get_credential_type(type);
-    entity->alg_ = alg;
+    cred_param->type_ = get_credential_type(type);
+    cred_param->alg_ = alg;
 
     return FIDO_ERR_SUCCESS;
 }
 
-static uint8_t pubkey_creddesc_parser(CborValue *value, PubKeyCredDesc *entity)
+static uint8_t pubkey_creddesc_parser(CborValue *value, CredentialDescriptor *cred_desc)
 {
     CborValue   type_cbor;
     CborValue   id_cbor;
@@ -293,10 +293,10 @@ static uint8_t pubkey_creddesc_parser(CborValue *value, PubKeyCredDesc *entity)
     result = textstring_parser(&type_cbor, type, &size);
     if (result != FIDO_ERR_SUCCESS)
         return result;
-    entity->type_ = get_credential_type(type);
+    cred_desc->type_ = get_credential_type(type);
 
-    size = sizeof(entity->id_);
-    result = bytestring_parser(&id_cbor, entity->id_.bytes_, &size);
+    size = sizeof(cred_desc->id_);
+    result = bytestring_parser(&id_cbor, cred_desc->id_.bytes_, &size);
 
     return result;
 }
@@ -438,7 +438,7 @@ static uint8_t parser_make_credential_client_data_hash(CborValue *value, ClientD
     return bytestring_parser(value, entity->hash_, &size);
 }
 
-static uint8_t parser_make_credential_rp(CborValue *value, RelyingPartyEntity *entity)
+static uint8_t parser_make_credential_rp(CborValue *value, RelyingPartyEntity *rp_entity)
 {
     CborValue   map;
     uint8_t     result = FIDO_ERR_SUCCESS;
@@ -465,8 +465,8 @@ static uint8_t parser_make_credential_rp(CborValue *value, RelyingPartyEntity *e
 
         if (strncmp(key, "id", 2) == 0)
         {
-            size = sizeof(entity->id_.id_);
-            result = textstring_parser(&map, entity->id_.id_, &size);
+            size = sizeof(rp_entity->id_.id_);
+            result = textstring_parser(&map, (char*)rp_entity->id_.id_, &size);
             if (result != FIDO_ERR_SUCCESS)
                 break;
         }
@@ -532,7 +532,7 @@ static uint8_t parser_make_credential_user(CborValue *value, UserEntity *entity)
             else if (strncmp(key, "displayName", 11) == 0)
             {
                 size = sizeof(entity->disp_name_);
-                result = textstring_parser(&map, entity->disp_name_, &size);
+                result = textstring_parser(&map, (char*)entity->disp_name_, &size);
                 if (result != FIDO_ERR_SUCCESS)
                     break;
             }
@@ -551,7 +551,7 @@ static uint8_t parser_make_credential_user(CborValue *value, UserEntity *entity)
     return result;
 }
 
-static uint8_t parser_make_credential_pubkey_cred_params(CborValue *value, PubKeyCredParamsEntity *entity)
+static uint8_t parser_make_credential_pubkey_cred_params(CborValue *value, CredentialParametersList *cred_param_list)
 {
     CborValue   map;
 
@@ -571,12 +571,13 @@ static uint8_t parser_make_credential_pubkey_cred_params(CborValue *value, PubKe
             break;
         }
 
-        int16_t     max_entities = sizeof(entity->params_) / sizeof(entity->params_[0]);
+        int16_t     max_entities = sizeof(cred_param_list->params_) / sizeof(cred_param_list->params_[0]);
 
-        for (uint32_t i = 0; (i < map_size) && (entity->count_ < max_entities); i++)
+        for (uint32_t i = 0; (i < map_size) && (cred_param_list->count_ < max_entities); i++)
         {
-            if ((result = pubkey_credparam_parser(&map, &entity->params_[entity->count_])) == FIDO_ERR_SUCCESS)
-                entity->count_++;
+            if ((result = pubkey_credparam_parser(&map, &cred_param_list->params_[cred_param_list->count_]))
+                    == FIDO_ERR_SUCCESS)
+                cred_param_list->count_++;
             else
                 break;
 
@@ -594,7 +595,7 @@ static uint8_t parser_make_credential_pubkey_cred_params(CborValue *value, PubKe
     return result;
 }
 
-static uint8_t parser_make_credential_exclude_list(CborValue *value, PubKeyCredDescEntity *entity)
+static uint8_t parser_make_credential_exclude_list(CborValue *value, CredentialDescriptorList *cred_desc_list)
 {
     CborValue   map;
 
@@ -614,12 +615,13 @@ static uint8_t parser_make_credential_exclude_list(CborValue *value, PubKeyCredD
             break;
         }
 
-        int16_t     max_entities = sizeof(entity->descs_) / sizeof(entity->descs_[0]);
+        int16_t     max_entities = sizeof(cred_desc_list->descs_) / sizeof(cred_desc_list->descs_[0]);
 
-        for (uint32_t i = 0; (i < map_size) && (entity->count_ < max_entities); i++)
+        for (uint32_t i = 0; (i < map_size) && (cred_desc_list->count_ < max_entities); i++)
         {
-            if ((result = pubkey_creddesc_parser(&map, &entity->descs_[entity->count_])) == FIDO_ERR_SUCCESS)
-                entity->count_++;
+            if ((result = pubkey_creddesc_parser(&map, &cred_desc_list->descs_[cred_desc_list->count_])) ==
+                    FIDO_ERR_SUCCESS)
+                cred_desc_list->count_++;
             else
                 break;
 
@@ -664,10 +666,10 @@ static uint8_t parser_make_credential_pin_protocol(CborValue *value, PinProtocol
     return result;
 }
 
-static uint8_t parser_get_assertion_rp_id(CborValue *value, RpIdEntity *entity)
+static uint8_t parser_get_assertion_rp_id(CborValue *value, RelyingPartyId *rpid)
 {
-    size_t  size = sizeof(entity->id_.id_);
-    return textstring_parser(value, entity->id_.id_, &size);
+    size_t  size = sizeof(rpid->id_);
+    return textstring_parser(value, (char*)rpid->id_, &size);
 }
 
 static uint8_t parser_get_assertion_client_data_hash(CborValue *value, ClientDataHashEntity *entity)
@@ -676,7 +678,7 @@ static uint8_t parser_get_assertion_client_data_hash(CborValue *value, ClientDat
     return bytestring_parser(value, entity->hash_, &size);
 }
 
-static uint8_t parser_get_assertion_allow_list(CborValue *value, PubKeyCredDescEntity *entity)
+static uint8_t parser_get_assertion_allow_list(CborValue *value, CredentialDescriptorList *cred_desc_list)
 {
     CborValue   map;
 
@@ -696,12 +698,13 @@ static uint8_t parser_get_assertion_allow_list(CborValue *value, PubKeyCredDescE
             break;
         }
 
-        int16_t     max_entities = sizeof(entity->descs_) / sizeof(entity->descs_[0]);
+        int16_t     max_entities = sizeof(cred_desc_list->descs_) / sizeof(cred_desc_list->descs_[0]);
 
-        for (uint32_t i = 0; (i < map_size) && (entity->count_ < max_entities); i++)
+        for (uint32_t i = 0; (i < map_size) && (cred_desc_list->count_ < max_entities); i++)
         {
-            if ((result = pubkey_creddesc_parser(&map, &entity->descs_[entity->count_])) == FIDO_ERR_SUCCESS)
-                entity->count_++;
+            if ((result = pubkey_creddesc_parser(&map, &cred_desc_list->descs_[cred_desc_list->count_])) ==
+                    FIDO_ERR_SUCCESS)
+                cred_desc_list->count_++;
             else
                 break;
 
@@ -782,13 +785,21 @@ static uint8_t parser_client_pin_pin_auth(CborValue *value, PinAuthEntity *entit
 static uint8_t parser_client_pin_new_pin_enc(CborValue *value, NewPinEncEntity *entity)
 {
     size_t  size = sizeof(entity->enc_);
-    return bytestring_parser(value, entity->enc_, &size);
+    uint8_t result = bytestring_parser(value, entity->enc_, &size);
+
+    entity->len_ = size;
+
+    return result;
 }
 
 static uint8_t parser_client_pin_pin_hash_enc(CborValue *value, PinHashEncEntity *entity)
 {
     size_t  size = sizeof(entity->enc_);
-    return bytestring_parser(value, entity->enc_, &size);
+    uint8_t result = bytestring_parser(value, entity->enc_, &size);
+
+    entity->len_ = size;
+
+    return result;
 }
 
 uint8_t ctap2_parser_make_credential(uint8_t *dat, uint16_t len, MakeCredential *make_credential)
@@ -852,7 +863,7 @@ uint8_t ctap2_parser_make_credential(uint8_t *dat, uint16_t len, MakeCredential 
                     make_credential->params_ |= MakeCredentialParam_user;
                 break;
             case MakeCredential_pubKeyCredParams:
-                result = parser_make_credential_pubkey_cred_params(&map, &make_credential->pubkey_cred_param_);
+                result = parser_make_credential_pubkey_cred_params(&map, &make_credential->cred_param_list_);
                 if (result == FIDO_ERR_SUCCESS)
                     make_credential->params_ |= MakeCredentialParam_pubKeyCredParams;
                 break;

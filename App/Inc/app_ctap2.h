@@ -16,8 +16,8 @@
 
 /* ****************************************************************************************************************** */
 
-void    fido2_init(void);
-void    fido2_reset(void);
-void    fido2_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms);
+void    ctap2_init(void);
+void    ctap2_reset(void);
+void    ctap2_postman(uint32_t cid, uint8_t *dat, uint16_t len, uint32_t now_ms);
 
 /* end of file ****************************************************************************************************** */

@@ -138,6 +138,5 @@
 BLOCKFIFO_CREATE(usbhid, 128, 64)
 
 BYTEARRAY_CREATE(hidif, 4096)
-//BYTEARRAY_CREATE(authn, 4096)
 
 /* end of file ****************************************************************************************************** */

@@ -12,6 +12,7 @@
 #include "app_device.h"
 #include "fidodef.h"
 #include "mbedtls/md.h"
+#include "mbedtls/pk.h"
 #include "mbedtls/ecp.h"
 #include "mbedtls/ecdh.h"
 
@@ -65,17 +66,17 @@ void make_secp256r1_private_key(uint8_t *param, int16_t param_len, uint8_t *priv
 void make_secp256r1_public_key(uint8_t *private_key, uint8_t *x, uint8_t *y)
 {
     mbedtls_ecp_keypair ecp_kp;
-    size_t  size;
-    uint8_t buffer[1 + SECP256R1_PUBLIC_KEY_SIZE];    // key format 1byte
+//    size_t  size;
+//    uint8_t buffer[1 + SECP256R1_PUBLIC_KEY_SIZE];    // key format 1byte
 
     mbedtls_ecp_keypair_init(&ecp_kp);
     mbedtls_ecp_group_load(&ecp_kp.grp, MBEDTLS_ECP_DP_SECP256R1);
     mbedtls_mpi_read_binary(&ecp_kp.d, private_key, SECP256R1_PRIVATE_KEY_SIZE);
     mbedtls_ecp_mul(&ecp_kp.grp, &ecp_kp.Q, &ecp_kp.d, &ecp_kp.grp.G, device_mbedtls_rng, NULL);
-    mbedtls_ecp_point_write_binary(&ecp_kp.grp, &ecp_kp.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &size, buffer, sizeof(buffer));
-
-    memcpy(x, buffer + 1, SECP256R1_PUBLIC_KEY_X_SIZE);
-    memcpy(y, buffer + 1 + SECP256R1_PUBLIC_KEY_X_SIZE, SECP256R1_PUBLIC_KEY_Y_SIZE);
+//    mbedtls_ecp_point_write_binary(&ecp_kp.grp, &ecp_kp.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &size, buffer, sizeof(buffer));
+//
+//    memcpy(x, buffer + 1, SECP256R1_PUBLIC_KEY_X_SIZE);
+//    memcpy(y, buffer + 1 + SECP256R1_PUBLIC_KEY_X_SIZE, SECP256R1_PUBLIC_KEY_Y_SIZE);
 }
 
 void get_authenticator_secret(uint8_t *x, uint8_t *y, uint8_t *shared_secret)
@@ -92,15 +93,15 @@ void get_authenticator_secret(uint8_t *x, uint8_t *y, uint8_t *shared_secret)
     mbedtls_ecdh_calc_secret(&ecdh_ctx, &size, shared_secret, SECP256R1_SHARED_SECRET_SIZE, device_mbedtls_rng, NULL);
 }
 
-bool check_array_empty(uint8_t *array, uint32_t len)
+int32_t check_array_empty(uint8_t *array, uint32_t len)
 {
-    bool    result = true;
+    int32_t     count = 0;
 
     for (uint32_t i = 0; i < len; i++)
         if (array[i] != 0)
-            result = false;
+            count++;
 
-    return result;
+    return count;
 }
 
 /* end of file ****************************************************************************************************** */

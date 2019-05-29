@@ -22,7 +22,7 @@
 
 #define PIN_CLASS                   0x54
 #define PIN_INS_TOUCH               0x10
-#define PIN_INS_CHECK               0x21
+#define PIN_INS_CHECK               0x20
 #define PIN_INS_GET                 0x21
 #define PIN_INS_SET                 0x22
 

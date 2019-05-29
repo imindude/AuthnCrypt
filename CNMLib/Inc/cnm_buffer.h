@@ -69,7 +69,6 @@ typedef struct ByteArray    ByteArray;
 DEFINE_BLOCKFIFO(usbhid);
 
 DEFINE_BYTEARRAY(hidif);
-//DEFINE_BYTEARRAY(authn);
 
 /* ****************************************************************************************************************** */
 

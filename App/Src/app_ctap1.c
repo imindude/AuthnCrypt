@@ -305,7 +305,7 @@ static void lease_authenticate(Ctap1Data *this)
 {
     const uint8_t   user_present = 1;
     uint8_t     priv_key[CTAP1_PRIV_KEY_SIZE];
-    uint32_t    count = device_get_counter();
+    uint32_t    count = device_get_info()->counter_++;
     uint8_t     bs_cnt[4];
 
     bs_cnt[0] = count >> 24 & 0xFF;

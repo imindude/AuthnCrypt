@@ -2,24 +2,30 @@
  * *********************************************************************************************************************
  * @title       Authn & Crypt
  * @author      imindude@gmail.com
- * @note        Application Code
+ * @note        Hardware Wrapping Layer
  * *********************************************************************************************************************
  */
 
-#pragma once
+#ifndef HWL_FLASH_H
+#define HWL_FLASH_H
 
 /* ****************************************************************************************************************** */
 
+#include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
-#include "fidodef.h"
 
 /* ****************************************************************************************************************** */
 
-uint8_t ctap2_maker_make_credential(MakeCredential *make_credential, CredentialId *credential_id,
-        uint8_t *buffer_header, uint16_t *buffer_size);
-uint8_t ctap2_maker_get_assertion(GetAssertion *get_assertion, CredentialList *cred_list, int8_t credential_count,
-        uint8_t *buffer_header, uint16_t *buffer_size);
-uint8_t ctap2_maker_get_info(uint8_t *buffer_header, uint16_t *buffer_size);
-uint8_t ctap2_maker_client_pin(ClientPin *client_pin, uint8_t *buffer_header, uint16_t *buffer_size);
+void    flash_init(void);
+bool    flash_write(uint32_t index, uint8_t *element, uint32_t element_size);
+bool    flash_read(uint32_t index, uint8_t *element, uint32_t element_size);
+void    flash_erase(void);
+bool    flash_backup_write(uint32_t index, uint8_t *element, uint32_t element_size);
+bool    flash_backup_read(uint32_t index, uint8_t *element, uint32_t element_size);
+
+/* ****************************************************************************************************************** */
+
+#endif  /* HWL_FLASH_H */
 
 /* end of file ****************************************************************************************************** */

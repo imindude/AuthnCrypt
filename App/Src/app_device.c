@@ -8,22 +8,39 @@
 
 #include <string.h>
 #include "stm32f4xx.h"
-#include "app_device.h"
 #include "app_def.h"
+#include "app_device.h"
+#include "app_misc.h"
+#include "hwl_flash.h"
+#include "hwl_button.h"
+#include "hwl_led.h"
 #include "hwl_rng.h"
+#include "hwl_hid.h"
 #include "mbedtls/ecdh.h"
+#include "mbedtls/md.h"
 
 /* ****************************************************************************************************************** */
 
 #define DEVICE_UID_POSTFIX      0x84E9B5C8
 
-/* ****************************************************************************************************************** */
-
-static DeviceInfo   _device_info;
-static DeviceAuth   _device_auth;
-static uint32_t     _counter;
+#define BLOB_EMPTY      0xFF
+#define BLOB_ALIVE      0xF0
+#define BLOB_DEAD       0x00
 
 /* ****************************************************************************************************************** */
+
+struct BlobReadIndex
+{
+    int16_t     rel_index_;
+    int16_t     abs_index_;
+};
+typedef struct BlobReadIndex    BlobReadIndex;
+
+/* ****************************************************************************************************************** */
+
+static DeviceInfo       _device_info;
+static DeviceAuth       _device_auth;
+static BlobReadIndex    _blob_read_index;
 
 static uint8_t  fido_certificate[] =
 {
@@ -77,7 +94,7 @@ static uint8_t  fido_private_key[] =
 
 /* ****************************************************************************************************************** */
 
-void device_init(void)
+static void init(void)
 {
     uint32_t    *uid_base = (uint32_t*)UID_BASE;
 
@@ -95,6 +112,11 @@ void device_init(void)
     _device_info.ver_.build_ = BUILD_NUMBER;
 
     _device_info.pin_confirmed_ = false;
+
+    /* I think, authentication counter is not need to save. Just increase the number when the dongle is powered on. */
+
+    rng_words(&_device_info.counter_, 1);
+    _device_info.counter_ &= 0xFF;
 
     /**
      * generate DeviceAuth
@@ -119,23 +141,127 @@ void device_init(void)
     // CAUTION!! filled from end of the buffer
     mbedtls_mpi_write_binary(&ecdh_ctx.d, buffer, sizeof(buffer));
     // CAUTION!! filled from start of the buffer
-    mbedtls_ecp_point_write_binary(&ecdh_ctx.grp, &ecdh_ctx.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &size, buffer, sizeof(buffer));
+    mbedtls_ecp_point_write_binary(&ecdh_ctx.grp, &ecdh_ctx.Q, MBEDTLS_ECP_PF_UNCOMPRESSED, &size, buffer,
+            sizeof(buffer));
 
     mbedtls_ecdh_free(&ecdh_ctx);
 
     // CAUTION!! filled from end of the buffer
-    memcpy(_device_auth.key_agreement_pri_, buffer + 65, sizeof(_device_auth.key_agreement_pri_));
+    memcpy(_device_auth.key_agreement_pri_, buffer + 1 + sizeof(_device_auth.key_agreement_pub_),
+            sizeof(_device_auth.key_agreement_pri_));
     // CAUTION!! filled from start of the buffer (skip POINT_FORMAT)
     memcpy(_device_auth.key_agreement_pub_, buffer + 1, sizeof(_device_auth.key_agreement_pub_));
 
     rng_bytes(_device_auth.pin_token_, sizeof(_device_auth.pin_token_));
 
-    /**
-     * I think, authentication counter is not need to store the NVM.
-     * Just increase the number when the dongle is powered on.
-     */
-    rng_words(&_counter, 1);
-    _counter &= 0xFFFF;
+    _device_auth.retry_pin_ = PIN_RETRY_MAX;
+
+    int16_t     pin_len = check_array_empty(_device_auth.pin_code_, sizeof(_device_auth.pin_code_));
+
+    if (pin_len >= PIN_MIN_LEN)
+    {
+        mbedtls_md(mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), _device_auth.pin_code_, pin_len,
+                _device_auth.pin_hash_);
+    }
+}
+
+static void compact_storage(void)
+{
+    DataBlob    blob;
+    int16_t     r_index = 0;
+    int16_t     w_index = 0;
+
+    while (flash_read(r_index, blob.bytes_, sizeof(blob.bytes_)))
+    {
+        if (blob.blob_.usage_ == BLOB_ALIVE)
+        {
+            flash_backup_write(w_index, blob.bytes_, sizeof(blob.bytes_));
+            w_index++;
+        }
+
+        r_index++;
+    }
+
+    flash_erase();
+
+    w_index = 0;
+
+    while (flash_backup_read(w_index, blob.bytes_, sizeof(blob.bytes_)))
+    {
+        if (blob.blob_.usage_ == BLOB_EMPTY)
+            break;
+
+        flash_write(w_index, blob.bytes_, sizeof(blob.bytes_));
+        w_index++;
+    }
+}
+
+static void reset_blob_index(void)
+{
+    _blob_read_index.rel_index_ = 0;
+    _blob_read_index.abs_index_ = 0;
+}
+
+static uint8_t skip_blob(int16_t index)
+{
+    DataBlob    blob;
+    int16_t     abs_index = _blob_read_index.abs_index_;
+
+    if (_blob_read_index.rel_index_ > index)
+        reset_blob_index();
+
+    while (_blob_read_index.rel_index_ < index)
+    {
+        if (flash_read(abs_index, blob.bytes_, sizeof(blob.bytes_)) == false)
+            return BLOB_DEAD;
+        if (blob.blob_.usage_ == BLOB_EMPTY)
+            return BLOB_EMPTY;
+
+        if (blob.blob_.usage_ == BLOB_ALIVE)
+        {
+            _blob_read_index.rel_index_++;
+            _blob_read_index.abs_index_ = abs_index;
+        }
+        abs_index++;
+    }
+
+    return (_blob_read_index.rel_index_ == index) ? BLOB_ALIVE : BLOB_EMPTY;
+}
+
+static bool append_blob(DataBlob *blob)
+{
+    DataBlob    saved;
+    int16_t     abs_index = _blob_read_index.abs_index_;
+
+    while (flash_read(abs_index, saved.bytes_, sizeof(saved.bytes_)))
+    {
+        if (saved.blob_.usage_ == BLOB_EMPTY)
+        {
+            blob->blob_.usage_ = BLOB_ALIVE;
+            return flash_write(abs_index, blob->bytes_, sizeof(blob->bytes_));
+        }
+        abs_index++;
+    }
+
+    return false;
+}
+
+void device_init(void)
+{
+    flash_init();
+    button_init();
+    led_init();
+    rng_init();
+    hid_init();
+
+    init();
+    reset_blob_index();
+}
+
+void device_reset(void)
+{
+    flash_erase();
+    reset_blob_index();
 }
 
 void device_get_rng(uint8_t *bytes, uint32_t len)
@@ -169,21 +295,75 @@ uint8_t* device_get_fido_cert(uint16_t *size)
     return fido_certificate;
 }
 
-uint32_t device_get_counter(void)
-{
-    return _counter++;
-}
-
 bool device_save_blob(DataBlob *blob)
 {
-    blob->blob_.usage_ = 0x10;
+    if (append_blob(blob) == false)
+    {
+        compact_storage();
+        reset_blob_index();
+        return append_blob(blob);
+    }
 
     return true;
 }
 
 bool device_load_blob(int16_t index, DataBlob *blob)
 {
-    return true;
+    if (skip_blob(index) == BLOB_ALIVE)
+    {
+        int16_t     abs_index = _blob_read_index.abs_index_;
+
+        while (flash_read(abs_index, blob->bytes_, sizeof(blob->bytes_)))
+        {
+            if (blob->blob_.usage_ == BLOB_ALIVE)
+            {
+                _blob_read_index.abs_index_ = abs_index;
+                return true;
+            }
+            else if (blob->blob_.usage_ == BLOB_DEAD)
+            {
+                abs_index++;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    return false;
+}
+
+bool device_remove_blob(int16_t index)
+{
+    if (skip_blob(index) == BLOB_ALIVE)
+    {
+        DataBlob    blob;
+        int16_t     abs_index = _blob_read_index.abs_index_;
+
+        while (flash_read(abs_index, blob.bytes_, sizeof(blob.bytes_)))
+        {
+            if (blob.blob_.usage_ == BLOB_ALIVE)
+            {
+                blob.blob_.usage_ = BLOB_DEAD;
+                flash_write(_blob_read_index.abs_index_, blob.bytes_, sizeof(blob.bytes_));
+
+                _blob_read_index.abs_index_ = abs_index;
+
+                return true;
+            }
+            else if (blob.blob_.usage_ == BLOB_DEAD)
+            {
+                abs_index++;
+            }
+            else
+            {
+                break;
+            }
+        }
+    }
+
+    return false;
 }
 
 /* ****************************************************************************************************************** */

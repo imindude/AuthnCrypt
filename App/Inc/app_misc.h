@@ -31,6 +31,6 @@ uint8_t make_attestation_sign(uint8_t *data, uint16_t data_size, uint8_t *sign_d
 void    make_secp256r1_private_key(uint8_t *param, int16_t param_len, uint8_t *private_key);
 void    make_secp256r1_public_key(uint8_t *private_key, uint8_t *x, uint8_t *y);
 void    get_authenticator_secret(uint8_t *x, uint8_t *y, uint8_t *shared_secret);
-bool    check_array_empty(uint8_t *array, uint32_t len);
+int32_t check_array_empty(uint8_t *array, uint32_t len);
 
 /* end of file ****************************************************************************************************** */
