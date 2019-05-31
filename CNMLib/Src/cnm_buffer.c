@@ -46,7 +46,7 @@
         return false;\
     }\
     \
-    static uint32_t _bf_##NAME##_size()\
+    static uint32_t _bf_##NAME##_size(void)\
     {\
         return __##NAME##_sz;\
     }\
@@ -84,39 +84,56 @@
         return 0;\
     }\
     \
-    static void _ba_##NAME##_flush()\
+    static bool _ba_##NAME##_insert(uint32_t i, uint8_t b)\
     {\
-        memset(__##NAME##_bf, 0, LENGTH);\
-        __##NAME##_wr = 0;\
-    }\
-    \
-    static void* _ba_##NAME##_head()\
-    {\
-        return (void*)__##NAME##_bf;\
-    }\
-    \
-    \
-    static void* _ba_##NAME##_get()\
-    {\
-        return (void*)(__##NAME##_bf + __##NAME##_wr);\
-    }\
-    \
-    static bool _ba_##NAME##_set(uint32_t pos)\
-    {\
-        if (pos < LENGTH)\
+        if (i < __##NAME##_wr)\
         {\
-            __##NAME##_wr = pos;\
+            __##NAME##_bf[i] = b;\
             return true;\
         }\
         return false;\
     }\
     \
-    static uint32_t _ba_##NAME##_size()\
+    static void _ba_##NAME##_flush(void)\
+    {\
+        memset(__##NAME##_bf, 0, LENGTH);\
+        __##NAME##_wr = 0;\
+    }\
+    \
+    static void* _ba_##NAME##_head(void)\
+    {\
+        return (void*)__##NAME##_bf;\
+    }\
+    \
+    \
+    static void* _ba_##NAME##_get(void)\
+    {\
+        return (void*)(__##NAME##_bf + __##NAME##_wr);\
+    }\
+    \
+    static bool _ba_##NAME##_set(bool offset, uint32_t pos)\
+    {\
+        uint32_t    new_pos = offset ? __##NAME##_wr + pos : pos;\
+        \
+        if (new_pos < LENGTH)\
+        {\
+            __##NAME##_wr = new_pos;\
+            return true;\
+        }\
+        return false;\
+    }\
+    \
+    static uint32_t _ba_##NAME##_count(void)\
     {\
         return __##NAME##_wr;\
     }\
     \
-    static uint32_t _ba_##NAME##_limit()\
+    static uint32_t _ba_##NAME##_remain(void)\
+    {\
+        return LENGTH - __##NAME##_wr;\
+    }\
+    \
+    static uint32_t _ba_##NAME##_max_size(void)\
     {\
         return LENGTH;\
     }\
@@ -125,12 +142,14 @@
     {\
             .add_byte  = _ba_##NAME##_add_byte,\
             .add_bytes = _ba_##NAME##_add_bytes,\
+            .insert    = _ba_##NAME##_insert,\
             .flush     = _ba_##NAME##_flush,\
             .head      = _ba_##NAME##_head,\
             .get       = _ba_##NAME##_get,\
             .set       = _ba_##NAME##_set,\
-            .size      = _ba_##NAME##_size,\
-            .limit     = _ba_##NAME##_limit,\
+            .count     = _ba_##NAME##_count,\
+            .remain    = _ba_##NAME##_remain,\
+            .max_size  = _ba_##NAME##_max_size,\
     };\
 
 /* ****************************************************************************************************************** */

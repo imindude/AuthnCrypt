@@ -12,8 +12,8 @@
 
 /* ****************************************************************************************************************** */
 
-#define USBD_VID                        0x0483
-#define USBD_PID                        0x5150
+#define USBD_VID                        0x31CB
+#define USBD_PID                        0xF001
 #define USBD_LANGID_STRING              0x0409
 #define USBD_MANUFACTURER_STRING        "Copy&Make"
 #define USBD_PRODUCT_FS_STRING          "Authn&Crypt"

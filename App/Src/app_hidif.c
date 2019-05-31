@@ -6,13 +6,14 @@
  * *********************************************************************************************************************
  */
 
-#include <app_ctap1.h>
 #include <string.h>
 #include "app_hidif.h"
 #include "app_def.h"
 #include "app_pin.h"
 #include "app_status.h"
 #include "app_device.h"
+#include "app_ctap1.h"
+#include "app_ctap2.h"
 #include "hwl_hid.h"
 #include "hwl_rng.h"
 #include "cnm_worker.h"
@@ -109,7 +110,7 @@ static void process_cbor(HidifChannel *channel, uint32_t now_ms)
 {
     if (FIDO_CAPABILITIES & FIDO_CAPABILITY_CBOR)
         // do something or
-        hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
+        ctap2_postman(channel->cid_, channel->buffer_, channel->rxlen_, now_ms);
     else
         hidif_error(channel->cid_, FIDO_ERR_UNSUPPORTED_OPTION);
 }
@@ -383,10 +384,10 @@ uint16_t hidif_append_sw(uint16_t sw)
 
 void hidif_write(uint32_t cid, uint8_t cmd)
 {
-    if ((ba_hidif.size() > 0) && (cid == _hidif_data.channel_.cid_))
+    if ((ba_hidif.count() > 0) && (cid == _hidif_data.channel_.cid_))
     {
         uint8_t         *dat = ba_hidif.head();
-        uint16_t        len = ba_hidif.size();
+        uint16_t        len = ba_hidif.count();
         HidifPacket     packet;
         HidifInitPacket *init_packet = &packet.packet_.init_;
         uint16_t        pos = 0;

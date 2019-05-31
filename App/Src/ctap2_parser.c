@@ -245,7 +245,7 @@ static uint8_t pubkey_credparam_parser(CborValue *value, CredentialParameters *c
             (cbor_value_get_type(&type_cbor) != CborTextStringType))
         return FIDO_ERR_INVALID_CBOR;
     if ((cbor_value_map_find_value(value, "alg", &alg_cbor) != CborNoError) ||
-            (cbor_value_get_type(&alg_cbor) != CborTextStringType))
+            (cbor_value_get_type(&alg_cbor) != CborIntegerType))
         return FIDO_ERR_INVALID_CBOR;
 
     char        type[16] = {
@@ -315,21 +315,20 @@ static uint8_t get_extensions(CborValue *value, ExtensionsEntity *entity)
 
     do
     {
-        if (cbor_value_get_map_length(&map, &map_size) != CborNoError)
+        if (cbor_value_get_map_length(value, &map_size) != CborNoError)
         {
             result = FIDO_ERR_INVALID_CBOR;
             break;
         }
 
-        char    key[16] = {
-                0, 0, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0, 0, 0, 0, 0
-        };
-        size_t  size;
-
         for (uint32_t i = 0; i < map_size; i++)
         {
-            size = sizeof(key);
+            char    key[16] = {
+                    0, 0, 0, 0, 0, 0, 0, 0,
+                    0, 0, 0, 0, 0, 0, 0, 0
+            };
+            size_t  size = sizeof(key);
+
             result = textstring_parser(&map, key, &size);
             if (result != FIDO_ERR_SUCCESS)
                 break;
@@ -398,32 +397,37 @@ static uint8_t get_options(CborValue *value, OptionsEntity *options)
         bool    b;
         size_t  size = sizeof(key);
 
-        if (cbor_value_get_map_length(&map, &map_size) != CborNoError)
-        {
-            result = FIDO_ERR_INVALID_CBOR;
-            break;
-        }
-        if ((result = textstring_parser(&map, key, &size)) != FIDO_ERR_SUCCESS)
-            break;
-        if (cbor_value_advance(&map) != CborNoError)
-        {
-            result = FIDO_ERR_INVALID_CBOR;
-            break;
-        }
-        if ((result = boolean_parser(&map, &b)) != FIDO_ERR_SUCCESS)
-            break;
-        if (cbor_value_advance(&map) != CborNoError)
+        if (cbor_value_get_map_length(value, &map_size) != CborNoError)
         {
             result = FIDO_ERR_INVALID_CBOR;
             break;
         }
 
-        if (strncmp(key, "rk", 2) == 0)
-            options->rk_ = b;
-        else if (strncmp(key, "up", 2) == 0)
-            options->up_ = b;
-        else if (strncmp(key, "uv", 2) == 0)
-            options->uv_ = b;
+        for (uint32_t i = 0; i < map_size; i++)
+        {
+            if ((result = textstring_parser(&map, key, &size)) != FIDO_ERR_SUCCESS)
+                break;
+            if (cbor_value_advance(&map) != CborNoError)
+            {
+                result = FIDO_ERR_INVALID_CBOR;
+                break;
+            }
+
+            if ((result = boolean_parser(&map, &b)) != FIDO_ERR_SUCCESS)
+                break;
+            if (cbor_value_advance(&map) != CborNoError)
+            {
+                result = FIDO_ERR_INVALID_CBOR;
+                break;
+            }
+
+            if (strncmp(key, "rk", 2) == 0)
+                options->rk_ = b;
+            else if (strncmp(key, "up", 2) == 0)
+                options->up_ = b;
+            else if (strncmp(key, "uv", 2) == 0)
+                options->uv_ = b;
+        }
     }
     while (0);
 
@@ -435,12 +439,18 @@ static uint8_t get_options(CborValue *value, OptionsEntity *options)
 static uint8_t parser_make_credential_client_data_hash(CborValue *value, ClientDataHashEntity *entity)
 {
     size_t  size = sizeof(entity->hash_);
-    return bytestring_parser(value, entity->hash_, &size);
+    uint8_t result = bytestring_parser(value, entity->hash_, &size);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_make_credential_rp(CborValue *value, RelyingPartyEntity *rp_entity)
 {
     CborValue   map;
+    size_t      map_size;
     uint8_t     result = FIDO_ERR_SUCCESS;
 
     if (cbor_value_get_type(value) != CborMapType)
@@ -450,31 +460,40 @@ static uint8_t parser_make_credential_rp(CborValue *value, RelyingPartyEntity *r
 
     do
     {
-        char    key[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
-        size_t  size = sizeof(key);
-
-        result = textstring_parser(&map, key, &size);
-        if (result != FIDO_ERR_SUCCESS)
-            break;
-
-        if (cbor_value_advance(&map) != CborNoError)
+        if (cbor_value_get_map_length(value, &map_size) != CborNoError)
         {
             result = FIDO_ERR_INVALID_CBOR;
             break;
         }
 
-        if (strncmp(key, "id", 2) == 0)
+        for (uint32_t i = 0; i < map_size; i++)
         {
-            size = sizeof(rp_entity->id_.id_);
-            result = textstring_parser(&map, (char*)rp_entity->id_.id_, &size);
+            char    key[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+            size_t  size = sizeof(key);
+
+            result = textstring_parser(&map, key, &size);
             if (result != FIDO_ERR_SUCCESS)
                 break;
-        }
 
-        if (cbor_value_advance(&map) != CborNoError)
-        {
-            result = FIDO_ERR_INVALID_CBOR;
-            break;
+            if (cbor_value_advance(&map) != CborNoError)
+            {
+                result = FIDO_ERR_INVALID_CBOR;
+                break;
+            }
+
+            if (strncmp(key, "id", 2) == 0)
+            {
+                size = sizeof(rp_entity->id_.id_);
+                result = textstring_parser(&map, (char*)rp_entity->id_.id_, &size);
+                if (result != FIDO_ERR_SUCCESS)
+                    break;
+            }
+
+            if (cbor_value_advance(&map) != CborNoError)
+            {
+                result = FIDO_ERR_INVALID_CBOR;
+                break;
+            }
         }
     }
     while (0);
@@ -525,7 +544,8 @@ static uint8_t parser_make_credential_user(CborValue *value, UserEntity *entity)
             if (strncmp(key, "id", 2) == 0)
             {
                 size = sizeof(entity->id_);
-                result = bytestring_parser(&map, entity->id_, &size);
+//                result = bytestring_parser(&map, entity->id_, &size);
+                result = textstring_parser(&map, (char*)entity->id_, &size);
                 if (result != FIDO_ERR_SUCCESS)
                     break;
             }
@@ -565,7 +585,7 @@ static uint8_t parser_make_credential_pubkey_cred_params(CborValue *value, Crede
 
     do
     {
-        if (cbor_value_get_map_length(&map, &map_size) != CborNoError)
+        if (cbor_value_get_array_length(value, &map_size) != CborNoError)
         {
             result = FIDO_ERR_INVALID_CBOR;
             break;
@@ -609,7 +629,7 @@ static uint8_t parser_make_credential_exclude_list(CborValue *value, CredentialD
 
     do
     {
-        if (cbor_value_get_map_length(&map, &map_size) != CborNoError)
+        if (cbor_value_get_array_length(value, &map_size) != CborNoError)
         {
             result = FIDO_ERR_INVALID_CBOR;
             break;
@@ -641,18 +661,33 @@ static uint8_t parser_make_credential_exclude_list(CborValue *value, CredentialD
 
 static uint8_t parser_make_credential_extensions(CborValue *value, ExtensionsEntity *entity)
 {
-    return get_extensions(value, entity);
+    uint8_t result = get_extensions(value, entity);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_make_credential_options(CborValue *value, OptionsEntity *entity)
 {
-    return get_options(value, entity);
+    uint8_t result = get_options(value, entity);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_make_credential_pin_auth(CborValue *value, PinAuthEntity *entity)
 {
     size_t  size = sizeof(entity->auth_);
-    return bytestring_parser(value, entity->auth_, &size);
+    uint8_t result = bytestring_parser(value, entity->auth_, &size);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_make_credential_pin_protocol(CborValue *value, PinProtocolEntity *entity)
@@ -669,13 +704,23 @@ static uint8_t parser_make_credential_pin_protocol(CborValue *value, PinProtocol
 static uint8_t parser_get_assertion_rp_id(CborValue *value, RelyingPartyId *rpid)
 {
     size_t  size = sizeof(rpid->id_);
-    return textstring_parser(value, (char*)rpid->id_, &size);
+    uint8_t result = textstring_parser(value, (char*)rpid->id_, &size);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_get_assertion_client_data_hash(CborValue *value, ClientDataHashEntity *entity)
 {
     size_t  size = sizeof(entity->hash_);
-    return bytestring_parser(value, entity->hash_, &size);
+    uint8_t result = bytestring_parser(value, entity->hash_, &size);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_get_assertion_allow_list(CborValue *value, CredentialDescriptorList *cred_desc_list)
@@ -692,7 +737,7 @@ static uint8_t parser_get_assertion_allow_list(CborValue *value, CredentialDescr
 
     do
     {
-        if (cbor_value_get_map_length(&map, &map_size) != CborNoError)
+        if (cbor_value_get_array_length(value, &map_size) != CborNoError)
         {
             result = FIDO_ERR_INVALID_CBOR;
             break;
@@ -724,18 +769,33 @@ static uint8_t parser_get_assertion_allow_list(CborValue *value, CredentialDescr
 
 static uint8_t parser_get_assertion_extensions(CborValue *value, ExtensionsEntity *entity)
 {
-    return get_extensions(value, entity);
+    uint8_t result = get_extensions(value, entity);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_get_assertion_options(CborValue *value, OptionsEntity *entity)
 {
-    return get_options(value, entity);
+    uint8_t result = get_options(value, entity);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_get_assertion_pin_auth(CborValue *value, PinAuthEntity *entity)
 {
     size_t  size = sizeof(entity->auth_);
-    return bytestring_parser(value, entity->auth_, &size);
+    uint8_t result = bytestring_parser(value, entity->auth_, &size);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_get_assertion_pin_protocol(CborValue *value, PinProtocolEntity *entity)
@@ -743,6 +803,8 @@ static uint8_t parser_get_assertion_pin_protocol(CborValue *value, PinProtocolEn
     int     version;
     uint8_t result = integer_parser(value, &version);
 
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
     if (result == FIDO_ERR_SUCCESS)
         entity->version_ = (uint32_t)version;
 
@@ -754,6 +816,8 @@ static uint8_t parser_client_pin_pin_protocol(CborValue *value, PinProtocolEntit
     int     version;
     uint8_t result = integer_parser(value, &version);
 
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
     if (result == FIDO_ERR_SUCCESS)
         entity->version_ = (uint32_t)version;
 
@@ -765,6 +829,8 @@ static uint8_t parser_client_pin_sub_command(CborValue *value, SubCommandEntity 
     int     command;
     uint8_t result = integer_parser(value, &command);
 
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
     if (result == FIDO_ERR_SUCCESS)
         entity->command_ = (uint32_t)command;
 
@@ -773,13 +839,23 @@ static uint8_t parser_client_pin_sub_command(CborValue *value, SubCommandEntity 
 
 static uint8_t parser_client_pin_key_agreement(CborValue *value, KeyAgreementEntity *entity)
 {
-    return cose_key_parser(value, &entity->key_);
+    uint8_t result = cose_key_parser(value, &entity->key_);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_client_pin_pin_auth(CborValue *value, PinAuthEntity *entity)
 {
     size_t  size = sizeof(entity->auth_);
-    return bytestring_parser(value, entity->auth_, &size);
+    uint8_t result = bytestring_parser(value, entity->auth_, &size);
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
+
+    return result;
 }
 
 static uint8_t parser_client_pin_new_pin_enc(CborValue *value, NewPinEncEntity *entity)
@@ -787,6 +863,8 @@ static uint8_t parser_client_pin_new_pin_enc(CborValue *value, NewPinEncEntity *
     size_t  size = sizeof(entity->enc_);
     uint8_t result = bytestring_parser(value, entity->enc_, &size);
 
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
     entity->len_ = size;
 
     return result;
@@ -797,6 +875,8 @@ static uint8_t parser_client_pin_pin_hash_enc(CborValue *value, PinHashEncEntity
     size_t  size = sizeof(entity->enc_);
     uint8_t result = bytestring_parser(value, entity->enc_, &size);
 
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
     entity->len_ = size;
 
     return result;
@@ -893,13 +973,8 @@ uint8_t ctap2_parser_make_credential(uint8_t *dat, uint16_t len, MakeCredential 
                     make_credential->params_ |= MakeCredentialParam_pinProtocol;
                 break;
             default:
-                // options not yet
-                break;
-            }
-
-            if (cbor_value_advance(&map) != CborNoError)
-            {
-                result = FIDO_ERR_INVALID_CBOR;
+                if (cbor_value_advance(&map) != CborNoError)
+                    result = FIDO_ERR_INVALID_CBOR;
                 break;
             }
         }

@@ -369,12 +369,14 @@ static void lease_make_credential(Ctap2Data *this)
          * step 11. generate an attestation statement
          */
 
-        uint16_t    buffer_size = ba_hidif.size();
+        ba_hidif.add_byte(FIDO_ERR_SUCCESS);
 
-        result = ctap2_maker_make_credential(mc, credential_id, ba_hidif.head(), &buffer_size);
+        uint16_t    buffer_size = ba_hidif.remain();
+
+        result = ctap2_maker_make_credential(mc, credential_id, ba_hidif.get(), &buffer_size);
         if (result != FIDO_ERR_SUCCESS)
             break;
-        ba_hidif.set(buffer_size);
+        ba_hidif.set(true, buffer_size);
     }
     while (0);
 
@@ -531,13 +533,15 @@ static void lease_get_assertion(Ctap2Data *this)
          * step 12. sign the clientDataHash
          */
 
-        uint16_t    buffer_size = ba_hidif.size();
+        ba_hidif.add_byte(FIDO_ERR_SUCCESS);
+
+        uint16_t    buffer_size = ba_hidif.remain();
 
         this->credential_count_ = 1;
-        result = ctap2_maker_get_assertion(ga, credential_list, this->credential_count_, ba_hidif.head(), &buffer_size);
+        result = ctap2_maker_get_assertion(ga, credential_list, this->credential_count_, ba_hidif.get(), &buffer_size);
         if (result != FIDO_ERR_SUCCESS)
             break;
-        ba_hidif.set(buffer_size);
+        ba_hidif.set(true, buffer_size);
 
         this->status_ = _GetAssertion_getNextAssertion;
     }
@@ -552,10 +556,12 @@ static void lease_get_assertion(Ctap2Data *this)
 
 static void try_get_info(Ctap2Data *this, uint8_t *dat, uint16_t len, uint32_t now_ms)
 {
-    uint16_t    buffer_size = ba_hidif.size();
-    uint8_t     result = ctap2_maker_get_info(ba_hidif.head(), &buffer_size);
+    ba_hidif.add_byte(FIDO_ERR_SUCCESS);
 
-    ba_hidif.set(buffer_size);
+    uint16_t    buffer_size = ba_hidif.remain();
+    uint8_t     result = ctap2_maker_get_info(ba_hidif.get(), &buffer_size);
+
+    ba_hidif.set(true, buffer_size);
 
     if (result != FIDO_ERR_SUCCESS)
         hidif_error(this->cid_, result);
@@ -586,12 +592,14 @@ static void try_client_pin(Ctap2Data *this, uint8_t *dat, uint16_t len, uint32_t
             break;
         }
 
-        uint16_t    buffer_size = ba_hidif.size();
+        ba_hidif.add_byte(FIDO_ERR_SUCCESS);
 
-        result = ctap2_maker_client_pin(cp, ba_hidif.head(), &buffer_size);
+        uint16_t    buffer_size = ba_hidif.remain();
+
+        result = ctap2_maker_client_pin(cp, ba_hidif.get(), &buffer_size);
         if (result != FIDO_ERR_SUCCESS)
             break;
-        ba_hidif.set(buffer_size);
+        ba_hidif.set(true, buffer_size);
     }
     while (0);
 
@@ -655,13 +663,15 @@ static void try_get_next_assertion(Ctap2Data *this, uint8_t *dat, uint16_t len, 
          * step 6. credentialCounter
          */
 
-        uint16_t    buffer_size = ba_hidif.size();
+        ba_hidif.add_byte(FIDO_ERR_SUCCESS);
+
+        uint16_t    buffer_size = ba_hidif.remain();
 
         this->credential_count_++;
-        result = ctap2_maker_get_assertion(ga, credential_list, this->credential_count_, ba_hidif.head(), &buffer_size);
+        result = ctap2_maker_get_assertion(ga, credential_list, this->credential_count_, ba_hidif.get(), &buffer_size);
         if (result != FIDO_ERR_SUCCESS)
             break;
-        ba_hidif.set(buffer_size);
+        ba_hidif.set(true, buffer_size);
 
         this->status_ = _GetNextAssertion_run;
     }

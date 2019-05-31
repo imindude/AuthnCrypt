@@ -52,12 +52,14 @@ struct ByteArray
 {
     uint32_t    (*add_byte)(uint8_t);
     uint32_t    (*add_bytes)(uint8_t*, uint32_t);
+    bool        (*insert)(uint32_t, uint8_t);
     void        (*flush)(void);
     void*       (*head)(void);
     void*       (*get)(void);
-    bool        (*set)(uint32_t);
-    uint32_t    (*size)(void);
-    uint32_t    (*limit)(void);
+    bool        (*set)(bool, uint32_t);
+    uint32_t    (*count)(void);
+    uint32_t    (*remain)(void);
+    uint32_t    (*max_size)(void);
 };
 typedef struct ByteArray    ByteArray;
 

@@ -321,6 +321,138 @@ static uint8_t build_key_agreement(CborEncoder *encoder)
     return FIDO_ERR_SUCCESS;
 }
 
+static uint8_t build_set_refresh_pin(KeyAgreementEntity *key_agreement, PinAuthEntity *pin_auth,
+        NewPinEncEntity *pin_enc, PinHashEncEntity *pin_hash)
+{
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    uint8_t     result = FIDO_ERR_SUCCESS;
+    size_t      size = mbedtls_md_get_size(md_info);
+    uint8_t     bytes[256];
+    uint8_t     shared_secret[size];
+    uint8_t     new_pin[PIN_MAX_LEN];
+    int16_t     pin_len;
+
+    memset(new_pin, 0, sizeof(new_pin));
+
+    /* SHA-256((baG).x) */
+
+    get_authenticator_secret(key_agreement->key_.x_, key_agreement->key_.y_, bytes);
+    mbedtls_md(md_info, bytes, sizeof(shared_secret), shared_secret);
+
+    do
+    {
+        mbedtls_md_context_t    md_ctx;
+
+        /* HMAC-SHA-256(sharedSecret, newPinEnc) or HMAC-SHA-256(sharedSecret, newPinEnc || pinHashEnc) */
+
+        mbedtls_md_init(&md_ctx);
+        mbedtls_md_setup(&md_ctx, md_info, 1);
+        mbedtls_md_hmac_starts(&md_ctx, shared_secret, sizeof(shared_secret));
+        if (pin_hash)
+            mbedtls_md_hmac_update(&md_ctx, pin_hash->enc_, pin_hash->len_);
+        mbedtls_md_hmac_finish(&md_ctx, bytes);
+
+        if (memcmp(bytes, pin_auth->auth_, sizeof(pin_auth->auth_)) != 0)
+        {
+            result = FIDO_ERR_PIN_AUTH_INVALID;
+            break;
+        }
+
+        /* AES256-CBC(sharedSecret, IV=0, newPin) */
+
+        mbedtls_cipher_context_t    cipher_ctx;
+
+        mbedtls_cipher_init(&cipher_ctx);
+        mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
+        mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_DECRYPT);
+        mbedtls_cipher_reset(&cipher_ctx);
+        mbedtls_cipher_update(&cipher_ctx, pin_enc->enc_, pin_enc->len_, bytes, &size);
+        mbedtls_cipher_finish(&cipher_ctx, new_pin, &size);
+        mbedtls_cipher_free(&cipher_ctx);
+
+        pin_len = check_array_empty(new_pin, size);
+        if (pin_len < PIN_MIN_LEN)
+        {
+            result = FIDO_ERR_PIN_POLICY_VIOLATION;
+            break;
+        }
+
+        if (pin_hash)
+        {
+            mbedtls_cipher_init(&cipher_ctx);
+            mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
+            mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_DECRYPT);
+            mbedtls_cipher_reset(&cipher_ctx);
+            mbedtls_cipher_update(&cipher_ctx, pin_hash->enc_, 16, bytes, &size);
+            mbedtls_cipher_finish(&cipher_ctx, bytes, &size);
+            mbedtls_cipher_free(&cipher_ctx);
+
+            if (memcmp(bytes, device_get_auth()->pin_hash_, 16) != 0)
+            {
+                result = FIDO_ERR_PIN_AUTH_INVALID;
+                break;
+            }
+        }
+    }
+    while (0);
+
+    if (result == FIDO_ERR_SUCCESS)
+    {
+        // save password
+        memset(device_get_auth()->pin_code_, 0, sizeof(device_get_auth()->pin_code_));
+        memcpy(device_get_auth()->pin_code_, new_pin, pin_len);
+    }
+
+    return result;
+}
+
+static uint8_t build_pin_token(KeyAgreementEntity *key_agreement, PinHashEncEntity *pin_hash, BufferHandle *bh)
+{
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    uint8_t     result = FIDO_ERR_SUCCESS;
+    size_t      size = mbedtls_md_get_size(md_info);
+    uint8_t     bytes[size];
+    uint8_t     shared_secret[size];
+
+    /* SHA-256((baG).x) */
+
+    get_authenticator_secret(key_agreement->key_.x_, key_agreement->key_.y_, bytes);
+    mbedtls_md(md_info, bytes, sizeof(shared_secret), shared_secret);
+
+    do
+    {
+        mbedtls_cipher_context_t    cipher_ctx;
+
+        mbedtls_cipher_init(&cipher_ctx);
+        mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
+        mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_DECRYPT);
+        mbedtls_cipher_reset(&cipher_ctx);
+        mbedtls_cipher_update(&cipher_ctx, pin_hash->enc_, 16, bytes, &size);
+        mbedtls_cipher_finish(&cipher_ctx, bytes, &size);
+        mbedtls_cipher_free(&cipher_ctx);
+
+        if (memcmp(bytes, device_get_auth()->pin_hash_, 16) != 0)
+        {
+            result = FIDO_ERR_PIN_AUTH_INVALID;
+            break;
+        }
+
+        mbedtls_cipher_init(&cipher_ctx);
+        mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
+        mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_ENCRYPT);
+        mbedtls_cipher_reset(&cipher_ctx);
+        mbedtls_cipher_update(&cipher_ctx, device_get_auth()->pin_token_, sizeof(device_get_auth()->pin_token_), bytes,
+                &size);
+        mbedtls_cipher_finish(&cipher_ctx, bytes, &size);
+        mbedtls_cipher_free(&cipher_ctx);
+
+        buif_add_bytes_unsafe(bh, bytes, size);
+    }
+    while (0);
+
+    return result;
+}
+
 uint8_t ctap2_maker_make_credential(MakeCredential *make_credential, CredentialId *credential_id,
         uint8_t *buffer_header, uint16_t *buffer_size)
 {
@@ -353,7 +485,8 @@ uint8_t ctap2_maker_make_credential(MakeCredential *make_credential, CredentialI
 
         for (int8_t i = 0; i < cred_param_list->count_; i++)
         {
-            if (is_support_public_key_credential_param(cred_param_list->params_[i].type_, cred_param_list->params_[i].alg_))
+            if (is_support_public_key_credential_param(cred_param_list->params_[i].type_,
+                    cred_param_list->params_[i].alg_))
             {
                 cred_param = &cred_param_list->params_[i];
                 break;
@@ -503,7 +636,8 @@ uint8_t ctap2_maker_get_info(uint8_t *buffer_header, uint16_t *buffer_size)
         /* version */
 
         cbor_encode_int(&map, GetInfoResp_versions);
-        cbor_encoder_create_array(&map, &array, 1);
+        cbor_encoder_create_array(&map, &array, 2);
+        cbor_encode_text_stringz(&array, CTAP1_VERSION_STR);
         cbor_encode_text_stringz(&array, CTAP2_VERSION_STR);
         cbor_encoder_close_container(&map, &array);
 
@@ -540,7 +674,7 @@ uint8_t ctap2_maker_get_info(uint8_t *buffer_header, uint16_t *buffer_size)
         /* maxMsgSize */
 
         cbor_encode_int(&map, GetInfoResp_maxMsgSize);
-        cbor_encode_uint(&map, ba_hidif.size());
+        cbor_encode_uint(&map, FIDO2_MAX_MSG_SIZE);
 
         /* pinProtocols */
 
@@ -555,138 +689,6 @@ uint8_t ctap2_maker_get_info(uint8_t *buffer_header, uint16_t *buffer_size)
     *buffer_size = cbor_encoder_get_buffer_size(&encoder, buffer_header);
 
     return FIDO_ERR_SUCCESS;
-}
-
-static uint8_t build_set_refresh_pin(KeyAgreementEntity *key_agreement, PinAuthEntity *pin_auth,
-        NewPinEncEntity *pin_enc, PinHashEncEntity *pin_hash)
-{
-    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    uint8_t     result = FIDO_ERR_SUCCESS;
-    size_t      size = mbedtls_md_get_size(md_info);
-    uint8_t     bytes[256];
-    uint8_t     shared_secret[size];
-    uint8_t     new_pin[PIN_MAX_LEN];
-    int16_t     pin_len;
-
-    memset(new_pin, 0, sizeof(new_pin));
-
-    /* SHA-256((baG).x) */
-
-    get_authenticator_secret(key_agreement->key_.x_, key_agreement->key_.y_, bytes);
-    mbedtls_md(md_info, bytes, sizeof(shared_secret), shared_secret);
-
-    do
-    {
-        mbedtls_md_context_t    md_ctx;
-
-        /* HMAC-SHA-256(sharedSecret, newPinEnc) or HMAC-SHA-256(sharedSecret, newPinEnc || pinHashEnc) */
-
-        mbedtls_md_init(&md_ctx);
-        mbedtls_md_setup(&md_ctx, md_info, 1);
-        mbedtls_md_hmac_starts(&md_ctx, shared_secret, sizeof(shared_secret));
-        if (pin_hash)
-            mbedtls_md_hmac_update(&md_ctx, pin_hash->enc_, pin_hash->len_);
-        mbedtls_md_hmac_finish(&md_ctx, bytes);
-
-        if (memcmp(bytes, pin_auth->auth_, sizeof(pin_auth->auth_)) != 0)
-        {
-            result = FIDO_ERR_PIN_AUTH_INVALID;
-            break;
-        }
-
-        /* AES256-CBC(sharedSecret, IV=0, newPin) */
-
-        mbedtls_cipher_context_t    cipher_ctx;
-
-        mbedtls_cipher_init(&cipher_ctx);
-        mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
-        mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_DECRYPT);
-        mbedtls_cipher_reset(&cipher_ctx);
-        mbedtls_cipher_update(&cipher_ctx, pin_enc->enc_, pin_enc->len_, bytes, &size);
-        mbedtls_cipher_finish(&cipher_ctx, new_pin, &size);
-        mbedtls_cipher_free(&cipher_ctx);
-
-        pin_len = check_array_empty(new_pin, size);
-        if (pin_len < PIN_MIN_LEN)
-        {
-            result = FIDO_ERR_PIN_POLICY_VIOLATION;
-            break;
-        }
-
-        if (pin_hash)
-        {
-            mbedtls_cipher_init(&cipher_ctx);
-            mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
-            mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_DECRYPT);
-            mbedtls_cipher_reset(&cipher_ctx);
-            mbedtls_cipher_update(&cipher_ctx, pin_hash->enc_, 16, bytes, &size);
-            mbedtls_cipher_finish(&cipher_ctx, bytes, &size);
-            mbedtls_cipher_free(&cipher_ctx);
-
-            if (memcmp(bytes, device_get_auth()->pin_hash_, 16) != 0)
-            {
-                result = FIDO_ERR_PIN_AUTH_INVALID;
-                break;
-            }
-        }
-    }
-    while (0);
-
-    if (result == FIDO_ERR_SUCCESS)
-    {
-        // save password
-        memset(device_get_auth()->pin_code_, 0, sizeof(device_get_auth()->pin_code_));
-        memcpy(device_get_auth()->pin_code_, new_pin, pin_len);
-    }
-
-    return result;
-}
-
-static uint8_t build_pin_token(KeyAgreementEntity *key_agreement, PinHashEncEntity *pin_hash, BufferHandle *bh)
-{
-    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    uint8_t     result = FIDO_ERR_SUCCESS;
-    size_t      size = mbedtls_md_get_size(md_info);
-    uint8_t     bytes[size];
-    uint8_t     shared_secret[size];
-
-    /* SHA-256((baG).x) */
-
-    get_authenticator_secret(key_agreement->key_.x_, key_agreement->key_.y_, bytes);
-    mbedtls_md(md_info, bytes, sizeof(shared_secret), shared_secret);
-
-    do
-    {
-        mbedtls_cipher_context_t    cipher_ctx;
-
-        mbedtls_cipher_init(&cipher_ctx);
-        mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
-        mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_DECRYPT);
-        mbedtls_cipher_reset(&cipher_ctx);
-        mbedtls_cipher_update(&cipher_ctx, pin_hash->enc_, 16, bytes, &size);
-        mbedtls_cipher_finish(&cipher_ctx, bytes, &size);
-        mbedtls_cipher_free(&cipher_ctx);
-
-        if (memcmp(bytes, device_get_auth()->pin_hash_, 16) != 0)
-        {
-            result = FIDO_ERR_PIN_AUTH_INVALID;
-            break;
-        }
-
-        mbedtls_cipher_init(&cipher_ctx);
-        mbedtls_cipher_setup(&cipher_ctx, mbedtls_cipher_info_from_type(MBEDTLS_CIPHER_AES_256_CBC));
-        mbedtls_cipher_setkey(&cipher_ctx, shared_secret, sizeof(shared_secret) * 8, MBEDTLS_ENCRYPT);
-        mbedtls_cipher_reset(&cipher_ctx);
-        mbedtls_cipher_update(&cipher_ctx, device_get_auth()->pin_token_, sizeof(device_get_auth()->pin_token_), bytes,
-                &size);
-        mbedtls_cipher_finish(&cipher_ctx, bytes, &size);
-        mbedtls_cipher_free(&cipher_ctx);
-
-        buif_add_bytes_unsafe(bh, bytes, size);
-    }
-    while (0);
-
-    return result;
 }
 
 uint8_t ctap2_maker_client_pin(ClientPin *client_pin, uint8_t *buffer_header, uint16_t *buffer_size)
@@ -736,6 +738,7 @@ uint8_t ctap2_maker_client_pin(ClientPin *client_pin, uint8_t *buffer_header, ui
     case ClientPIN_SubCommand_getPINToken:
 
         result = build_pin_token(&client_pin->key_agreement_, &client_pin->pin_hash_enc_, &buffer_handle);
+//        buffer_handle.buffer_;
         break;
 
     default:

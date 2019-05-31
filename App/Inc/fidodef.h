@@ -22,7 +22,7 @@
 #define FIDO_CAPABILITY_WINK        0x01
 #define FIDO_CAPABILITY_CBOR        0x04
 #define FIDO_CAPABILITY_NMSG        0x08
-#define FIDO_CAPABILITIES           (FIDO_CAPABILITY_WINK)// | FIDO_CAPABILITY_CBOR)
+#define FIDO_CAPABILITIES           (FIDO_CAPABILITY_WINK | FIDO_CAPABILITY_CBOR)
 
 /**
  * KEEPALIVE command params
@@ -209,6 +209,7 @@
  */
 
 #define FIDO2_PIN_PROTOCOL_VER              1
+#define FIDO2_MAX_MSG_SIZE                  1200
 
 /* ****************************************************************************************************************** */
 
