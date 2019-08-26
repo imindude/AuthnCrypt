@@ -87,7 +87,7 @@ static uint8_t  USBD_HID_DeviceQualifierDesc[USB_LEN_DEV_QUALIFIER_DESC] =
 
 static uint8_t  USBD_HID_ReportDesc[USB_HID_REPORT_DESC_SIZE] =
 {
-        0x06, 0xD0, 0xF1,       // USAGE PAGE (FIDO Alliance)
+        0x06, 0xD1, 0xF1,       // USAGE PAGE (FIDO Alliance)
         0x09, 0x01,             // USAGE (U2F Authenticator Device)
         0xA1, 0x01,             // COLLECTION (Application)
 

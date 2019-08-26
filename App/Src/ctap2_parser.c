@@ -27,14 +27,12 @@ static uint8_t bytestring_parser(CborValue *value, uint8_t *params, size_t *size
     if (cbor_value_get_string_length(value, &actual_size) != CborNoError)
         return FIDO_ERR_INVALID_CBOR;
 
+    *size = actual_size;
+
     if ((actual_size > 0) && (params != NULL))
     {
         if (cbor_value_copy_byte_string(value, params, size, NULL) != CborNoError)
             return FIDO_ERR_LIMIT_EXCEEDED;
-    }
-    else
-    {
-        *size = actual_size;
     }
 
     return FIDO_ERR_SUCCESS;
@@ -49,14 +47,12 @@ static uint8_t textstring_parser(CborValue *value, char *params, size_t *size)
     if (cbor_value_get_string_length(value, &actual_size) != CborNoError)
         return FIDO_ERR_INVALID_CBOR;
 
+    *size = actual_size;
+
     if ((actual_size > 0) && (params != NULL))
     {
         if (cbor_value_copy_text_string(value, params, size, NULL) != CborNoError)
             return FIDO_ERR_LIMIT_EXCEEDED;
-    }
-    else
-    {
-        *size = actual_size;
     }
 
     return FIDO_ERR_SUCCESS;
@@ -149,7 +145,8 @@ static uint8_t cose_key_parser(CborValue *value, CoseKey *cose)
     }
     while (0);
 
-    cbor_value_leave_container(value, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(value, &map);
 
     return result;
 }
@@ -231,6 +228,9 @@ static uint8_t hmac_secret_parser(CborValue *value, HmacSecret *secret)
     }
     while (0);
 
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(value, &map);
+
     return result;
 }
 
@@ -303,13 +303,12 @@ static uint8_t pubkey_creddesc_parser(CborValue *value, CredentialDescriptor *cr
 
 static uint8_t get_extensions(CborValue *value, ExtensionsEntity *entity)
 {
-    if (cbor_value_get_type(value) != CborMapType)
-        return FIDO_ERR_INVALID_CBOR;
-
     CborValue   map;
     uint8_t     result = FIDO_ERR_SUCCESS;
     size_t      map_size;
 
+    if (cbor_value_get_type(value) != CborMapType)
+        return FIDO_ERR_INVALID_CBOR;
     if (cbor_value_enter_container(value, &map) != CborNoError)
         return FIDO_ERR_INVALID_CBOR;
 
@@ -374,20 +373,20 @@ static uint8_t get_extensions(CborValue *value, ExtensionsEntity *entity)
     }
     while (0);
 
-    cbor_value_leave_container(value, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(value, &map);
 
     return result;
 }
 
 static uint8_t get_options(CborValue *value, OptionsEntity *options)
 {
-    if (cbor_value_get_type(value) != CborMapType)
-        return FIDO_ERR_INVALID_CBOR;
-
     CborValue   map;
     size_t      map_size;
     uint8_t     result = FIDO_ERR_SUCCESS;
 
+    if (cbor_value_get_type(value) != CborMapType)
+        return FIDO_ERR_INVALID_CBOR;
     if (cbor_value_enter_container(value, &map) != CborNoError)
         return FIDO_ERR_INVALID_CBOR;
 
@@ -431,7 +430,8 @@ static uint8_t get_options(CborValue *value, OptionsEntity *options)
     }
     while (0);
 
-    cbor_value_leave_container(value, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(value, &map);
 
     return result;
 }
@@ -498,7 +498,8 @@ static uint8_t parser_make_credential_rp(CborValue *value, RelyingPartyEntity *r
     }
     while (0);
 
-    cbor_value_leave_container(value, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(value, &map);
 
     return result;
 }
@@ -544,8 +545,8 @@ static uint8_t parser_make_credential_user(CborValue *value, UserEntity *entity)
             if (strncmp(key, "id", 2) == 0)
             {
                 size = sizeof(entity->id_);
-//                result = bytestring_parser(&map, entity->id_, &size);
-                result = textstring_parser(&map, (char*)entity->id_, &size);
+                result = bytestring_parser(&map, entity->id_, &size);
+//                result = textstring_parser(&map, (char*)entity->id_, &size);
                 if (result != FIDO_ERR_SUCCESS)
                     break;
             }
@@ -566,7 +567,8 @@ static uint8_t parser_make_credential_user(CborValue *value, UserEntity *entity)
     }
     while (0);
 
-    cbor_value_leave_container(value, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(value, &map);
 
     return result;
 }
@@ -697,6 +699,9 @@ static uint8_t parser_make_credential_pin_protocol(CborValue *value, PinProtocol
 
     if (result == FIDO_ERR_SUCCESS)
         entity->version_ = (uint32_t)version;
+
+    if (cbor_value_advance(value) != CborNoError)
+        result = FIDO_ERR_INVALID_CBOR;
 
     return result;
 }
@@ -981,7 +986,8 @@ uint8_t ctap2_parser_make_credential(uint8_t *dat, uint16_t len, MakeCredential 
     }
     while (0);
 
-    cbor_value_leave_container(&iter, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(&iter, &map);
 
     return result;
 }
@@ -1080,7 +1086,8 @@ uint8_t ctap2_parser_get_assertion(uint8_t *dat, uint16_t len, GetAssertion *get
     }
     while (0);
 
-    cbor_value_leave_container(&iter, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(&iter, &map);
 
     return result;
 }
@@ -1171,7 +1178,8 @@ uint8_t ctap2_parser_client_pin(uint8_t *dat, uint16_t len, ClientPin *client_pi
     }
     while (0);
 
-    cbor_value_leave_container(&iter, &map);
+    if (result == FIDO_ERR_SUCCESS)
+        cbor_value_leave_container(&iter, &map);
 
     return result;
 }

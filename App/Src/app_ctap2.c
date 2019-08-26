@@ -204,7 +204,7 @@ static void try_make_credential(Ctap2Data *this, uint8_t *dat, uint16_t len, uin
         if (result != FIDO_ERR_SUCCESS)
             break;
 
-        if ((mc->params_ | MakeCredentialParam_Required) != MakeCredentialParam_Required)
+        if ((mc->params_ & MakeCredentialParam_Required) != MakeCredentialParam_Required)
         {
             result = FIDO_ERR_INVALID_PARAMETER;
             break;
@@ -214,7 +214,7 @@ static void try_make_credential(Ctap2Data *this, uint8_t *dat, uint16_t len, uin
          * step 1. excludeList
          */
 
-        if (mc->params_ | MakeCredentialParam_excludeList)
+        if (mc->params_ & MakeCredentialParam_excludeList)
         {
             for (int8_t i = 0; i < mc->exclude_list_.count_; i++)
             {
@@ -230,7 +230,7 @@ static void try_make_credential(Ctap2Data *this, uint8_t *dat, uint16_t len, uin
          * step 2. pubKeyCredParams
          */
 
-        if (mc->params_ | MakeCredential_pubKeyCredParams)
+        if (mc->params_ & MakeCredential_pubKeyCredParams)
         {
             result = FIDO_ERR_UNSUPPORTED_ALGORITHM;
 
@@ -251,7 +251,7 @@ static void try_make_credential(Ctap2Data *this, uint8_t *dat, uint16_t len, uin
          * step 3. oiptions
          */
 
-        if (mc->params_ | MakeCredentialParam_options)
+        if (mc->params_ & MakeCredentialParam_options)
         {
             if (mc->options_.up_)
             {
@@ -271,9 +271,9 @@ static void try_make_credential(Ctap2Data *this, uint8_t *dat, uint16_t len, uin
          * step 7. pinAuth & pinProtocol
          */
 
-        if (mc->params_ | MakeCredentialParam_pinAuth)
+        if (mc->params_ & MakeCredentialParam_pinAuth)
         {
-            if ((mc->params_ | MakeCredentialParam_pinProtocol) && check_pin_protocol(mc->pin_protocol_.version_))
+            if ((mc->params_ & MakeCredentialParam_pinProtocol) && check_pin_protocol(mc->pin_protocol_.version_))
             {
                 const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
                 uint8_t hash[mbedtls_md_get_size(md_info)];
@@ -342,7 +342,7 @@ static void lease_make_credential(Ctap2Data *this)
          * step 10. rk
          */
 
-        if ((mc->params_ | MakeCredentialParam_options) && mc->options_.rk_)
+        if ((mc->params_ & MakeCredentialParam_options) && mc->options_.rk_)
         {
             const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
             DataBlob        blob;
@@ -398,7 +398,7 @@ static void try_get_assertion(Ctap2Data *this, uint8_t *dat, uint16_t len, uint3
         if (result != FIDO_ERR_SUCCESS)
             break;
 
-        if ((ga->params_ | GetAssertionParam_Required) != GetAssertionParam_Required)
+        if ((ga->params_ & GetAssertionParam_Required) != GetAssertionParam_Required)
         {
             result = FIDO_ERR_INVALID_PARAMETER;
             break;
@@ -414,7 +414,7 @@ static void try_get_assertion(Ctap2Data *this, uint8_t *dat, uint16_t len, uint3
          * step 9. applicable credentials
          */
 
-        if (ga->params_ | GetAssertionParam_allowList)
+        if (ga->params_ & GetAssertionParam_allowList)
         {
             int8_t  max_credentials = sizeof(credential_list->credentials_) / sizeof(credential_list->credentials_[0]);
 
@@ -447,9 +447,9 @@ static void try_get_assertion(Ctap2Data *this, uint8_t *dat, uint16_t len, uint3
          * step 4. pinAuth & clientPin
          */
 
-        if (ga->params_ | GetAssertionParam_pinAuth)
+        if (ga->params_ & GetAssertionParam_pinAuth)
         {
-            if ((ga->params_ | GetAssertionParam_pinProtocol) && check_pin_protocol(ga->pin_protocol_.version_))
+            if ((ga->params_ & GetAssertionParam_pinProtocol) && check_pin_protocol(ga->pin_protocol_.version_))
             {
                 const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
                 uint8_t hash[mbedtls_md_get_size(md_info)];
@@ -488,7 +488,7 @@ static void try_get_assertion(Ctap2Data *this, uint8_t *dat, uint16_t len, uint3
          * step 7. user consent
          */
 
-        if (ga->params_ | GetAssertionParam_options)
+        if (ga->params_ & GetAssertionParam_options)
         {
             if (ga->options_.rk_)
             {
@@ -580,13 +580,13 @@ static void try_client_pin(Ctap2Data *this, uint8_t *dat, uint16_t len, uint32_t
         if (result != FIDO_ERR_SUCCESS)
             break;
 
-        if ((cp->params_ | ClientPinParam_Required) != ClientPinParam_Required)
+        if ((cp->params_ & ClientPinParam_Required) != ClientPinParam_Required)
         {
             result = FIDO_ERR_INVALID_PARAMETER;
             break;
         }
 
-        if ((cp->params_ | ClientPinParam_pinProtocol) && (cp->pin_protocol_.version_ != FIDO2_PIN_PROTOCOL_VER))
+        if ((cp->params_ & ClientPinParam_pinProtocol) && (cp->pin_protocol_.version_ != FIDO2_PIN_PROTOCOL_VER))
         {
             result = FIDO_ERR_INVALID_PARAMETER;
             break;
